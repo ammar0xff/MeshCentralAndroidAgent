@@ -43,7 +43,7 @@ jobs:
         run: |
           keytool -genkeypair \
             -v \
-            -keystore mdm-release.keystore \
+            -keystore app/mdm-release.keystore \
             -alias mdm \
             -keyalg RSA \
             -keysize 4096 \
