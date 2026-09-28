@@ -59,14 +59,12 @@ jobs:
           echo "keystorePassword=changeit" >> local.properties
           echo "keyAlias=mdm" >> local.properties
           echo "keyPassword=changeit" >> local.properties
-          echo "serverUrl=${{ secrets.SERVER_URL }}" >> local.properties
-          echo "pairToken=${{ secrets.PAIR_TOKEN }}" >> local.properties
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -PserverUrl="${{ secrets.SERVER_URL }}" -PpairToken="${{ secrets.PAIR_TOKEN }}"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
