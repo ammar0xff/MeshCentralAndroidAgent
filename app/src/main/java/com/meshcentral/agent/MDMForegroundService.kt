@@ -127,7 +127,7 @@ class MDMForegroundService : Service() {
     }
 
     private fun connectAgent() {
-        val serverLink = BuildConfig.SERVER_URL.ifEmpty { hardCodedServerLink } ?: return
+        val serverLink = if (BuildConfig.SERVER_URL.isNotEmpty()) normalizeServerLink(BuildConfig.SERVER_URL) else hardCodedServerLink ?: return
         val parts = serverLink.split(',')
         if (parts.size < 3) return
 

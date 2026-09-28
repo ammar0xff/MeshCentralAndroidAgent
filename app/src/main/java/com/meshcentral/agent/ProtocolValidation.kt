@@ -13,6 +13,17 @@ internal fun isMeshServerLinkValid(value: String): Boolean {
         parts[2].length >= 3
 }
 
+// MeshCentral shows the pairing link percent-encoded, and the MeshID uses '$' and '@'
+// as base64 substitutions, so a raw value can arrive as %24 / %40.
+internal fun normalizeServerLink(value: String): String {
+    if (!value.contains('%')) return value
+    return try {
+        java.net.URLDecoder.decode(value, "UTF-8")
+    } catch (e: Exception) {
+        value
+    }
+}
+
 internal fun isTunnelUsageAllowed(expectedUsage: Int?, actualUsage: Int): Boolean {
     return expectedUsage == null || expectedUsage == actualUsage
 }

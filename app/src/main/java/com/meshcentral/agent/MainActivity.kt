@@ -150,7 +150,7 @@ class MainActivity : AppCompatActivity() {
 
         // Use BuildConfig server URL if available
         if (BuildConfig.SERVER_URL.isNotEmpty()) {
-            serverLink = BuildConfig.SERVER_URL
+            serverLink = normalizeServerLink(BuildConfig.SERVER_URL)
         }
 
         // Start foreground service and connect agent
