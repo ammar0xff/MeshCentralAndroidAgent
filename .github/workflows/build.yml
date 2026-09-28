@@ -65,9 +65,11 @@ jobs:
 
       - name: Build Release APK
         env:
-          SERVER_URL: ${{ secrets.SERVER_URL }}
-          PAIR_TOKEN: ${{ secrets.PAIR_TOKEN }}
-        run: ./gradlew assembleRelease --no-daemon -PserverUrl='$SERVER_URL' -PpairToken='$PAIR_TOKEN'
+          ORG_GRADLE_PROJECT_serverUrl: ${{ secrets.SERVER_URL }}
+          ORG_GRADLE_PROJECT_pairToken: ${{ secrets.PAIR_TOKEN }}
+        run: |
+          printf 'serverUrl bytes=%s sha=%s\n' "$(printf '%s' "$ORG_GRADLE_PROJECT_serverUrl" | wc -c)" "$(printf '%s' "$ORG_GRADLE_PROJECT_serverUrl" | sha256sum | cut -d' ' -f1)"
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
