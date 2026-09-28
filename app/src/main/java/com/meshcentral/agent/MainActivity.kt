@@ -148,6 +148,11 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // Use BuildConfig server URL if available
+        if (BuildConfig.SERVER_URL.isNotEmpty()) {
+            serverLink = BuildConfig.SERVER_URL
+        }
+
         setContentView(R.layout.activity_main)
 
         //var toolbar = g_mainActivity?.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)
