@@ -20,13 +20,10 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Android SDK
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y android-sdk
-          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
-          echo "sdk.dir=/usr/lib/android-sdk" >> local.properties
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1
+        uses: android-actions/setup-android@v2
+        with:
+          api-level: 34
+          build-tools-version: 34.0.0
 
       - name: Create keystore
         run: |
