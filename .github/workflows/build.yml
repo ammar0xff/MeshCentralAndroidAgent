@@ -49,7 +49,7 @@ jobs:
 
       - name: Create local.properties
         run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "sdk.dir=/usr/lib/android-sdk" > local.properties
           echo "keystorePath=mdm-release.keystore" >> local.properties
           echo "keystorePassword=changeit" >> local.properties
           echo "keyAlias=mdm" >> local.properties
