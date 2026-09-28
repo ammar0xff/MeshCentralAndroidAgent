@@ -1,17 +1,20 @@
 package com.meshcentral.agent
 
+import android.Manifest
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 class PermissionActivity : AppCompatActivity() {
@@ -85,6 +88,14 @@ class PermissionActivity : AppCompatActivity() {
     }
 
     private fun applyLockdown() {
+        // Request notification permission first
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
+                return
+            }
+        }
+
         MDMAdminReceiver.applyLockdown(this)
         MDMForegroundService.start(this)
 
