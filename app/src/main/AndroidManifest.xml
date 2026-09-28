@@ -18,6 +18,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove"/>
+    <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" tools:node="remove"/>
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" tools:node="remove"/>
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -32,21 +34,22 @@
             android:value="@string/default_notification_channel_id" />
 
         <activity
+            android:name=".PermissionActivity"
+            android:theme="@style/Theme.MeshCentralAgent.NoActionBar"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:theme="@style/Theme.MeshCentralAgent.NoActionBar"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
                 <data android:scheme="mc" />
-
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </activity>
 
@@ -61,5 +64,34 @@
         <service
             android:name=".ScreenCaptureService"
             android:foregroundServiceType="mediaProjection" />
+
+        <receiver
+            android:name=".MDMAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".MDMAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <service
+            android:name=".MDMForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

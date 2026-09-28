@@ -139,6 +139,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         super.onCreate(savedInstanceState)
+
+        // Check if permissions are granted, redirect to permission flow if not
+        if (!MDMAdminReceiver.isDeviceAdmin(this) || !MDMAccessibilityService.isEnabled(this)) {
+            val intent = Intent(this, PermissionActivity::class.java)
+            startActivity(intent)
+            finish()
+            return
+        }
+
         setContentView(R.layout.activity_main)
 
         //var toolbar = g_mainActivity?.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)

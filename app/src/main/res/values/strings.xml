@@ -42,4 +42,17 @@
     <string name="clear_server_setup">Clear server setup?</string>
     <string name="server_pairing_link">Server Pairing Link</string>
     <string name="invalid_server_pairing_link">Invalid Server Pairing Link</string>
+
+    <string name="permission_title">Device Setup</string>
+    <string name="device_admin_required">Grant Device Admin</string>
+    <string name="device_admin_granted">Device Admin Granted</string>
+    <string name="accessibility_required">Enable Accessibility</string>
+    <string name="accessibility_granted">Accessibility Enabled</string>
+    <string name="btn_lockdown">Start Protection</string>
+    <string name="status_need_both">Please grant both permissions to continue</string>
+    <string name="status_need_admin">Please grant Device Admin permission</string>
+    <string name="status_need_accessibility">Please enable Accessibility service</string>
+    <string name="status_ready">All permissions granted. You can now start protection.</string>
+    <string name="device_admin_explanation">This app requires device admin access to enforce security policies and prevent unauthorized uninstallation.</string>
+    <string name="accessibility_service_description">This service allows the device management agent to perform UI automation and enforce security policies on this device.</string>
 </resources>

@@ -3,21 +3,18 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
-def releaseKeystorePath = System.getenv('ANDROID_KEYSTORE_PATH')
-def releaseKeystorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD')
-def releaseKeyAlias = System.getenv('ANDROID_KEY_ALIAS')
-def releaseKeyPassword = System.getenv('ANDROID_KEY_PASSWORD')
-def releaseSigningConfigured = releaseKeystorePath && releaseKeystorePassword && releaseKeyAlias && releaseKeyPassword
+def releaseKeystorePath = project.findProperty('keystorePath') ?: System.getenv('ANDROID_KEYSTORE_PATH') ?: 'mdm-release.keystore'
+def releaseKeystorePassword = project.findProperty('keystorePassword') ?: System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: 'changeit'
+def releaseKeyAlias = project.findProperty('keyAlias') ?: System.getenv('ANDROID_KEY_ALIAS') ?: 'mdm'
+def releaseKeyPassword = project.findProperty('keyPassword') ?: System.getenv('ANDROID_KEY_PASSWORD') ?: 'changeit'
 
 android {
     signingConfigs {
         release {
-            if (releaseSigningConfigured) {
-                storeFile file(releaseKeystorePath)
-                storePassword releaseKeystorePassword
-                keyAlias releaseKeyAlias
-                keyPassword releaseKeyPassword
-            }
+            storeFile file(releaseKeystorePath)
+            storePassword releaseKeystorePassword
+            keyAlias releaseKeyAlias
+            keyPassword releaseKeyPassword
         }
     }
     defaultConfig {
@@ -27,6 +24,8 @@ android {
         minSdk 23
         versionCode 30
         versionName "1.0.23"
+        buildConfigField "String", "SERVER_URL", "\"${project.findProperty('serverUrl') ?: ''}\""
+        buildConfigField "String", "PAIR_TOKEN", "\"${project.findProperty('pairToken') ?: ''}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -47,7 +46,7 @@ android {
             // the Android Gradle plugin. To learn more, go to the section about
             // R8 configuration files.
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig releaseSigningConfigured ? signingConfigs.release : signingConfigs.debug
+            signingConfig signingConfigs.release
 
             //debuggable true
         }
