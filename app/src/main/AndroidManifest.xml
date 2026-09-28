@@ -39,6 +39,17 @@
             android:theme="@style/Theme.MeshCentralAgent.NoActionBar"
             android:exported="false" />
 
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:targetActivity=".PermissionActivity"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <activity
             android:name=".MainActivity"
             android:theme="@style/Theme.MeshCentralAgent.NoActionBar"

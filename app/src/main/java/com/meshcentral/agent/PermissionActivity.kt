@@ -4,6 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -86,6 +87,10 @@ class PermissionActivity : AppCompatActivity() {
     private fun applyLockdown() {
         MDMAdminReceiver.applyLockdown(this)
         MDMForegroundService.start(this)
+
+        val pm = packageManager
+        val alias = ComponentName(this, "com.meshcentral.agent.LauncherAlias")
+        pm.setComponentEnabledSetting(alias, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
 
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
