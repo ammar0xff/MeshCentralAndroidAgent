@@ -31,7 +31,7 @@ jobs:
           echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_HOME/licenses/android-sdk-license
           echo "84831b9409646a918e305735c46f275c40148f" > $ANDROID_HOME/licenses/android-sdk-license
           echo "e9b71c4e0f8b7b6b0e6b6b6b6b6b6b6b6" > $ANDROID_HOME/licenses/android-sdk-license
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1
 
       - name: Create keystore
