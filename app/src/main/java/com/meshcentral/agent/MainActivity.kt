@@ -153,6 +153,12 @@ class MainActivity : AppCompatActivity() {
             serverLink = BuildConfig.SERVER_URL
         }
 
+        // Start foreground service and connect agent
+        MDMForegroundService.start(this)
+        if (g_autoConnect && !g_userDisconnect && (meshAgent == null)) {
+            toggleAgentConnection(false)
+        }
+
         setContentView(R.layout.activity_main)
 
         //var toolbar = g_mainActivity?.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)
