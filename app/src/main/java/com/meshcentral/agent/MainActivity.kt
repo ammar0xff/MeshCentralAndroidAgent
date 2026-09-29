@@ -10,6 +10,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -74,6 +75,7 @@ var visibleScreen : Int = 1
 
 // Server connection values
 var serverLink : String? = null
+@Volatile
 var meshAgent : MeshAgent? = null
 var agentCertificate : X509Certificate? = null
 var agentCertificateKey : PrivateKey? = null
@@ -96,7 +98,7 @@ var g_desktop_frameRateLimiter : Int = 100
 // Two-factor authentication values
 var g_auth_url : Uri? = null
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), MDMAgentHost {
     var alert : AlertDialog? = null
     lateinit var notificationChannel: NotificationChannel
     lateinit var notificationManager: NotificationManager
@@ -153,11 +155,9 @@ class MainActivity : AppCompatActivity() {
             serverLink = normalizeServerLink(BuildConfig.SERVER_URL)
         }
 
-        // Start foreground service and connect agent
-        MDMForegroundService.start(this)
-        if (g_autoConnect && !g_userDisconnect && (meshAgent == null)) {
-            toggleAgentConnection(false)
-        }
+        // Always-on agent: the foreground service owns the connection and keeps
+        // it alive, so removing the permission redirect can come back on its own.
+        MDMForegroundService.ensureRunning(this)
 
         setContentView(R.layout.activity_main)
 
@@ -222,7 +222,7 @@ class MainActivity : AppCompatActivity() {
         // Activate the settings
         settingsChanged()
         if (g_autoConnect && !g_userDisconnect && (meshAgent == null)) {
-            toggleAgentConnection(false)
+            MDMForegroundService.ensureRunning(this)
         }
     }
 
@@ -359,20 +359,16 @@ class MainActivity : AppCompatActivity() {
 
     fun setMeshServerLink(x: String?) {
         if ((serverLink == x) || (hardCodedServerLink != null)) return
-        if (meshAgent != null) { // Stop the agent
-            meshAgent?.Stop()
-            meshAgent = null
-        }
         serverLink = x
         val sharedPreferences = getSharedPreferences("meshagent", Context.MODE_PRIVATE)
         sharedPreferences.edit().putString("qrmsh", x).apply()
         mainFragment?.refreshInfo()
         g_userDisconnect = false
-        if (g_autoConnect) { toggleAgentConnection(false) }
+        if (g_autoConnect) { MDMForegroundService.reconnect(this) }
     }
 
     // Open a URL in the web view fragment
-    fun openUrl(xpageUrl: String) : Boolean {
+    override fun openUrl(xpageUrl: String) : Boolean {
         if (visibleScreen == 2) return false
         pageUrl = xpageUrl;
         if (visibleScreen == 1) {
@@ -385,7 +381,7 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    fun returnToMainScreen() {
+    override fun returnToMainScreen() {
         this.runOnUiThread {
             if (visibleScreen == 2) {
                 if (scannerFragment != null) scannerFragment?.exit()
@@ -399,7 +395,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun agentStateChanged() {
+    override fun agentStateChanged() {
         this.runOnUiThread {
             if ((meshAgent != null) && (meshAgent?.state == 0)) {
                 meshAgent = null
@@ -410,7 +406,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun refreshInfo() {
+    override fun refreshInfo() {
         this.runOnUiThread {
             mainFragment?.refreshInfo()
         }
@@ -432,7 +428,7 @@ class MainActivity : AppCompatActivity() {
         alert = builder.show()
     }
 
-    fun showAlertMessage(title: String, msg: String) {
+    override fun showAlertMessage(title: String, msg: String) {
         if (alert != null) {
             alert?.dismiss()
             alert = null
@@ -446,7 +442,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun showToastMessage(msg: String) {
+    override fun showToastMessage(msg: String) {
         this.runOnUiThread {
             var toast = Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG)
             toast?.setGravity(Gravity.CENTER, 0, 300)
@@ -552,100 +548,34 @@ class MainActivity : AppCompatActivity() {
             }
             connectAgent(userInitiated)
         } else if (meshAgent != null) {
-            // Stop the agent
+            // Stop the agent. A user-initiated disconnect stops the always-on
+            // agent until the user (or a boot) starts it again.
             if (userInitiated) { g_userDisconnect = true }
             stopProjection()
-            meshAgent?.Stop()
-            meshAgent = null
+            MDMForegroundService.stop(this)
         }
         mainFragment?.refreshInfo()
     }
 
+    // The foreground service is the single owner of the live [MeshAgent]; this
+    // activity only requests the desired end state.
     private fun connectAgent(userInitiated: Boolean) {
         requestAllPermissions()
-        if (!ensureAgentIdentity()) return
-
-        if (!userInitiated) {
-            meshAgent = MeshAgent(this, getServerHost()!!, getServerHash()!!, getDevGroup()!!)
-            meshAgent?.Start()
+        if (userInitiated) { g_userDisconnect = false } // Explicit intent to connect
+        if (meshAgent == null || meshAgent?.state != 3) {
+            MDMForegroundService.reconnect(this)
         } else {
-            if (g_autoConnect) {
-                if (g_userDisconnect) {
-                    // We are not trying to connect, switch to connecting
-                    g_userDisconnect = false
-                    meshAgent =
-                        MeshAgent(this, getServerHost()!!, getServerHash()!!, getDevGroup()!!)
-                    meshAgent?.Start()
-                } else {
-                    // We are trying to connect, switch to not trying
-                    g_userDisconnect = true
-                }
-            } else {
-                // We are not in auto connect mode, try to connect
-                g_userDisconnect = true
-                meshAgent = MeshAgent(this, getServerHost()!!, getServerHash()!!, getDevGroup()!!)
-                meshAgent?.Start()
-            }
+            MDMForegroundService.ensureRunning(this)
         }
     }
 
     private fun ensureAgentIdentity(): Boolean {
-        if ((agentCertificate != null) && (agentCertificateKey != null)) return true
-
-        val sharedPreferences = getSharedPreferences("meshagent", Context.MODE_PRIVATE)
-        return try {
-            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-            if (!keyStore.containsAlias(AGENT_KEY_ALIAS)) {
-                val certb64 = sharedPreferences.getString("agentCert", null)
-                val keyb64 = sharedPreferences.getString("agentKey", null)
-                if ((certb64 != null) && (keyb64 != null)) {
-                    val certificate = CertificateFactory.getInstance("X509").generateCertificate(
-                        ByteArrayInputStream(Base64.decode(certb64, Base64.DEFAULT))
-                    ) as X509Certificate
-                    val keySpec = PKCS8EncodedKeySpec(Base64.decode(keyb64, Base64.DEFAULT))
-                    val privateKey = KeyFactory.getInstance("RSA").generatePrivate(keySpec)
-                    val protection = KeyProtection.Builder(KeyProperties.PURPOSE_SIGN)
-                        .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA384)
-                        .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
-                        .build()
-                    keyStore.setEntry(
-                        AGENT_KEY_ALIAS,
-                        KeyStore.PrivateKeyEntry(privateKey, arrayOf(certificate)),
-                        protection
-                    )
-                } else {
-                    generateAgentIdentity()
-                }
-            }
-
-            agentCertificate = keyStore.getCertificate(AGENT_KEY_ALIAS) as X509Certificate
-            agentCertificateKey = keyStore.getKey(AGENT_KEY_ALIAS, null) as PrivateKey
-            sharedPreferences.edit().remove("agentCert").remove("agentKey").apply()
-            true
-        } catch (error: Exception) {
-            Log.e(TAG, "Unable to load or create agent identity", error)
-            agentCertificate = null
-            agentCertificateKey = null
-            showAlertMessage(getString(R.string.agent_identity_error_title), getString(R.string.agent_identity_error_message))
-            false
-        }
-    }
-
-    private fun generateAgentIdentity() {
-        val keyGen = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, ANDROID_KEYSTORE)
-        val now = System.currentTimeMillis()
-        keyGen.initialize(
-            KeyGenParameterSpec.Builder(AGENT_KEY_ALIAS, KeyProperties.PURPOSE_SIGN)
-                .setKeySize(2048)
-                .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA384)
-                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
-                .setCertificateSubject(X500Principal("CN=android.agent.meshcentral.com"))
-                .setCertificateSerialNumber(BigInteger(63, SecureRandom()).max(BigInteger.ONE))
-                .setCertificateNotBefore(Date(now - ONE_DAY_MILLIS))
-                .setCertificateNotAfter(Date(now + CERTIFICATE_LIFETIME_MILLIS))
-                .build()
+        if (AgentIdentity.ensure(applicationContext)) return true
+        showAlertMessage(
+            getString(R.string.agent_identity_error_title),
+            getString(R.string.agent_identity_error_message)
         )
-        keyGen.generateKeyPair()
+        return false
     }
 
     fun showNotification(title: String?, body: String?, url: String?) {
@@ -717,14 +647,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Start screen sharing
-    fun startProjection() {
+    override fun startProjection() {
         if ((g_ScreenCaptureService != null) || (meshAgent == null) || (meshAgent!!.state != 3)) return
         val mProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         screenCaptureLauncher.launch(mProjectionManager.createScreenCaptureIntent())
     }
 
     // Stop screen sharing
-    fun stopProjection() {
+    override fun stopProjection() {
         if (g_ScreenCaptureService == null) return
         startService(com.meshcentral.agent.ScreenCaptureService.getStopIntent(this))
     }
@@ -788,11 +718,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val AGENT_KEY_ALIAS = "meshcentral-agent-identity"
         const val REQUEST_ALL_PERMISSIONS = 1
         const val REQUEST_LOCAL_NETWORK_PERMISSION = 2
-        private const val ONE_DAY_MILLIS = 24L * 60L * 60L * 1000L
-        private const val CERTIFICATE_LIFETIME_MILLIS = 20L * 365L * ONE_DAY_MILLIS
     }
 }

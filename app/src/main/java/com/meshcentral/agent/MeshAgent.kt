@@ -46,9 +46,9 @@ class MeshUserInfo(userid: String, realname: String?, image: Bitmap?) {
 }
 
 @SuppressLint("CustomX509TrustManager", "InlinedApi")
-class MeshAgent(parent: MainActivity, host: String, certHash: String, devGroupId: String) : WebSocketListener() {
+class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId: String) : WebSocketListener() {
     @Volatile
-    var parent : MainActivity = parent
+    var parent : MDMAgentHost = parent
         private set
     val host : String = host
     val serverCertHash: String = certHash
@@ -72,7 +72,7 @@ class MeshAgent(parent: MainActivity, host: String, certHash: String, devGroupId
         //println("MeshAgent Constructor: ${host}, ${certHash}, $devGroupId")
     }
 
-    fun attachParent(parent: MainActivity) {
+    fun attachParent(parent: MDMAgentHost) {
         this.parent = parent
     }
 
@@ -257,10 +257,10 @@ class MeshAgent(parent: MainActivity, host: String, certHash: String, devGroupId
                     var capabilities = 12;      // Capabilities of the agent (bitmask): 1 = Desktop, 2 = Terminal, 4 = Files, 8 = Console, 16 = JavaScript
                     var deviceName: String? = null;
                     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S) {
-                       deviceName = Settings.Secure.getString(parent.contentResolver, "bluetooth_name");
+                       deviceName = Settings.Secure.getString(parent.getApplicationContext().contentResolver, "bluetooth_name");
                     }
                     if (deviceName == null) {
-                        deviceName = Settings.Global.getString(parent.contentResolver, Settings.Global.DEVICE_NAME) ?: "UNKNOWN_DEVICE_NAME";
+                        deviceName = Settings.Global.getString(parent.getApplicationContext().contentResolver, Settings.Global.DEVICE_NAME) ?: "UNKNOWN_DEVICE_NAME";
                     }
                     val deviceNameUtf = deviceName.toByteArray(Charsets.UTF_8)
                     //println("DeviceName: ${deviceName}")
@@ -548,7 +548,7 @@ class MeshAgent(parent: MainActivity, host: String, certHash: String, devGroupId
 
     // Handle a capability command from the panel and echo the result back on the same channel.
     private fun processMdmCommand(json: JSONObject) {
-        val ctx = parent
+        val ctx = parent.getApplicationContext()
         val cmd = json.optString("cmd")
         val seq = json.optLong("seq", 0L)
         val args = json.optJSONObject("args") ?: JSONObject()
@@ -747,7 +747,7 @@ class MeshAgent(parent: MainActivity, host: String, certHash: String, devGroupId
     private fun getSysBatteryInfo() : JSONObject? {
         try {
             val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { ifilter ->
-                parent.applicationContext.registerReceiver(null, ifilter)
+                parent.getApplicationContext().registerReceiver(null, ifilter)
             }
             val status: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
             val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING

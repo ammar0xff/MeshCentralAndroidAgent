@@ -20,6 +20,6 @@ class MDMBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
         Log.i(TAG, "Boot action received: $action")
-        MDMForegroundService.start(context)
+        MDMForegroundService.ensureRunning(context)
     }
 }

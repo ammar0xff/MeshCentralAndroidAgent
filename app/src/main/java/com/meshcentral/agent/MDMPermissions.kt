@@ -200,7 +200,12 @@ object MDMPermissions {
             }
         },
         SpecialAccess("doNotDisturb", false) { dndGranted(it) },
-        SpecialAccess("autoStart", false) { true }
+        // Only HONOR/Huawei actually manage "auto-start on boot" per-app; everywhere
+        // else the row is satisfied so it just drops out of the list.
+        SpecialAccess("autoStart", false) {
+            val m = Build.MANUFACTURER.lowercase()
+            !(m.contains("huawei") || m.contains("honor"))
+        }
     )
 
     /** All runtime permissions flattened, de-duplicated and limited to this SDK level. */
@@ -254,9 +259,33 @@ object MDMPermissions {
             if (Build.VERSION.SDK_INT >= 30) Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}"))
             else null
         "batteryOptimization" ->
-            if (Build.VERSION.SDK_INT >= 23) Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-            else null
+            if (Build.VERSION.SDK_INT >= 23) {
+                // Direct per-app allow dialog, so the agent can keep running forever.
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:${context.packageName}")
+                )
+            } else null
         "doNotDisturb" -> Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+        "autoStart" -> {
+            val manufacturer = Build.MANUFACTURER.lowercase()
+            val vendorLauncher = if (manufacturer.contains("huawei") || manufacturer.contains("honor")) {
+                listOf(
+                    ComponentName(
+                        "com.huawei.systemmanager",
+                        "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+                    ),
+                    ComponentName(
+                        "com.honor.systemmanager",
+                        "com.honor.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+                    )
+                ).firstOrNull { cn ->
+                    context.packageManager.resolveActivity(Intent().setComponent(cn), 0) != null
+                }
+            } else null
+            if (vendorLauncher != null) Intent().setComponent(vendorLauncher)
+            else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+        }
         else -> null
     }
 

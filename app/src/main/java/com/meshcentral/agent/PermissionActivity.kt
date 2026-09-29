@@ -320,7 +320,7 @@ class PermissionActivity : AppCompatActivity() {
         }
 
         MDMAdminReceiver.applyLockdown(this)
-        MDMForegroundService.start(this)
+        MDMForegroundService.ensureRunning(this)
 
         val pm = packageManager
         val alias = ComponentName(this, "com.meshcentral.agent.LauncherAlias")
