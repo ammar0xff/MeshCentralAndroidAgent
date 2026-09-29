@@ -6,14 +6,16 @@ pushed. The Git tag and GitHub Release name must exactly match the Android
 
 ## One-Time Signing Setup
 
-GitHub Actions requires a production signing keystore. Add these repository
-secrets under **Settings > Secrets and variables > Actions** before creating a
+GitHub Actions requires a production signing keystore. Add this repository
+secret under **Settings > Secrets and variables > Actions** before creating a
 release:
 
-- `ANDROID_KEYSTORE_BASE64`: the Base64-encoded contents of the keystore.
-- `ANDROID_KEYSTORE_PASSWORD`: the keystore password.
-- `ANDROID_KEY_ALIAS`: the signing key alias.
-- `ANDROID_KEY_PASSWORD`: the signing key password.
+- `ANDROID_SIGNING_KEY_B64`: the Base64-encoded contents of the keystore.
+
+The release workflow decodes it to `app/mdm-release.keystore`, the same
+location and credentials (alias `mdm`) the regular build workflow uses, so
+releases and CI builds are signed with one key. A release fails immediately
+when the secret is missing rather than publishing under a throwaway key.
 
 On Windows PowerShell, create the Base64 value without modifying the keystore:
 

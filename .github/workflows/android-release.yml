@@ -34,25 +34,19 @@ jobs:
       - name: Configure release signing
         shell: bash
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_SIGNING_KEY_B64: ${{ secrets.ANDROID_SIGNING_KEY_B64 }}
         run: |
-          for value in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-            if [[ -z "${!value}" ]]; then
-              echo "Missing required GitHub Actions secret: $value"
-              exit 1
-            fi
-          done
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-release.keystore"
+          # Same contract as build.yml: the repo-stable keystore, decoded where
+          # gradle.properties points (app/mdm-release.keystore, alias mdm,
+          # storepass changeit). Publishing under a throwaway key would break
+          # in-place upgrades, so a missing secret fails the release loudly.
+          if [ -z "$ANDROID_SIGNING_KEY_B64" ]; then
+            echo "Missing required GitHub Actions secret: ANDROID_SIGNING_KEY_B64" >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_SIGNING_KEY_B64" | base64 --decode > app/mdm-release.keystore
 
       - name: Build release APK and AAB
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-release.keystore
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease bundleRelease
