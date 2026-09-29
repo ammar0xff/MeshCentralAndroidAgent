@@ -94,7 +94,7 @@
     <string name="special_battery">Ignore battery optimizations</string>
     <string name="special_dnd">Do Not Disturb access</string>
     <string name="special_autostart">Auto-start on boot</string>
-    <string name="special_autostart_manual">Can\'t verify — tap Enable</string>
+    <string name="special_autostart_manual">Can\'t verify (tap Enable)</string>
 
     <string name="mdm_service_running">Active — update and control</string>
     <string name="mdm_service_title">MeshCentral MDM</string>

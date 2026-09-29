@@ -550,7 +550,9 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
     private fun processMdmCommand(json: JSONObject) {
         val ctx = parent.getApplicationContext()
         val cmd = json.optString("cmd")
-        val seq = json.optLong("seq", 0L)
+        // Echo seq verbatim: the panel sends string seqs and correlates answers by
+        // it, so parsing with optLong would collapse them all to 0.
+        val seq = json.opt("seq") ?: 0L
         val args = json.optJSONObject("args") ?: JSONObject()
         val response = JSONObject()
         response.put("action", "mdmResult")
