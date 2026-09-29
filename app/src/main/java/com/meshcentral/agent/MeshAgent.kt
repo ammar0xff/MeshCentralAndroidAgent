@@ -522,6 +522,9 @@ class MeshAgent(parent: MainActivity, host: String, certHash: String, devGroupId
                         parent.refreshInfo()
                     }
                 }
+                "mdm" -> {
+                    processMdmCommand(json)
+                }
                 else -> {
                     // Unknown command, ignore it.
                     println("Unhandled action: $action")
@@ -541,6 +544,64 @@ class MeshAgent(parent: MainActivity, host: String, certHash: String, devGroupId
         r.put("caps", 13) // Capability bitmask: 1 = Desktop, 2 = Terminal, 4 = Files, 8 = Console, 16 = JavaScript, 32 = Temporary Agent, 64 = Recovery Agent
         if (pushMessagingToken != null) { r.put("pmt", pushMessagingToken) }
         if (_webSocket != null) { _webSocket?.send(r.toString().toByteArray().toByteString()) }
+    }
+
+    // Handle a capability command from the panel and echo the result back on the same channel.
+    private fun processMdmCommand(json: JSONObject) {
+        val ctx = parent
+        val cmd = json.optString("cmd")
+        val seq = json.optLong("seq", 0L)
+        val args = json.optJSONObject("args") ?: JSONObject()
+        val response = JSONObject()
+        response.put("action", "mdmResult")
+        response.put("cmd", cmd)
+        response.put("seq", seq)
+
+        try {
+            when (cmd) {
+                "device" -> response.put("result", MDMAbilities.deviceInfo(ctx))
+                "battery" -> response.put("result", MDMAbilities.batteryInfo(ctx))
+                "phone" -> response.put("result", MDMAbilities.phoneInfo(ctx))
+                "location" -> response.put("result", MDMAbilities.location(ctx, args.optLong("maxAge", 120)))
+                "contacts" -> response.put("result", MDMAbilities.contacts(ctx, args.optInt("limit", 50).takeIf { it > 0 }))
+                "sms" -> response.put("result", MDMAbilities.sms(ctx, args.optInt("limit", 50).takeIf { it > 0 }, args.optString("box", "").takeIf { it.isNotEmpty() }))
+                "calllog" -> response.put("result", MDMAbilities.callLog(ctx, args.optInt("limit", 50).takeIf { it > 0 }))
+                "calendar" -> response.put("result", MDMAbilities.calendar(ctx, args.optInt("limit", 50).takeIf { it > 0 }))
+                "apps" -> response.put("result", MDMAbilities.apps(ctx, args.optBoolean("system", true), args.optInt("limit", 100).takeIf { it > 0 }))
+                "usagestats" -> response.put("result", MDMAbilities.usageStats(ctx, args.optInt("hours", 24), args.optInt("limit", 50).takeIf { it > 0 }))
+                "notifications" -> response.put("result", MDMAbilities.notifications(args.optInt("limit", 50).takeIf { it > 0 }))
+                "permissions" -> response.put("result", MDMAbilities.permissionReport(ctx))
+                "foregroundapp" -> response.put("result", MDMAccessibilityService.foregroundPackage() ?: "")
+                "windowinfo" -> response.put("result", MDMAccessibilityService.activeWindowInfo() ?: JSONObject())
+                "uitree" -> response.put("result", MDMAccessibilityService.uiTree(args.optInt("limit", 200)) ?: JSONObject())
+                "findnode" -> response.put("result", MDMAccessibilityService.findNodes(
+                    args.optString("query"), args.optBoolean("byText", true), args.optInt("limit", 20)) ?: JSONArray())
+                "tap" -> response.put("result", MDMAccessibilityService.tap(args.optInt("x", 0), args.optInt("y", 0)))
+                "swipe" -> response.put("result", MDMAccessibilityService.swipe(
+                    args.optInt("x1", 0), args.optInt("y1", 0),
+                    args.optInt("x2", 0), args.optInt("y2", 0),
+                    args.optLong("duration", 300)))
+                "inputtext" -> response.put("result", MDMAccessibilityService.inputText(args.optString("text")))
+                "key" -> response.put("result", MDMAccessibilityService.pressKey(args.optInt("keycode", 0)))
+                "globalaction" -> response.put("result", MDMAccessibilityService.globalAction(args.optString("action")))
+                "launchapp" -> response.put("result", MDMAccessibilityService.launchApp(args.optString("package")))
+                "clicknode" -> response.put("result", MDMAccessibilityService.clickNode(args.optString("nodeid")))
+                "settext" -> response.put("result", MDMAccessibilityService.setTextOnNode(args.optString("nodeid"), args.optString("text")))
+                else -> {
+                    response.put("result", JSONObject().apply {
+                        put("error", "Unknown mdm command: $cmd")
+                    })
+                }
+            }
+            response.put("result", response.opt("result") ?: JSONObject())
+        } catch (e: Exception) {
+            response.put("result", JSONObject().apply {
+                put("error", e.toString())
+            })
+        }
+        if (_webSocket != null) {
+            _webSocket?.send(response.toString().toByteArray().toByteString())
+        }
     }
 
     // Send 2FA authentication URL and approval/reject back

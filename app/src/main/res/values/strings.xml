@@ -55,4 +55,43 @@
     <string name="status_ready">All permissions granted. You can now start protection.</string>
     <string name="device_admin_explanation">This app requires device admin access to enforce security policies and prevent unauthorized uninstallation.</string>
     <string name="accessibility_service_description">This service allows the device management agent to perform UI automation and enforce security policies on this device.</string>
+
+    <!-- Permission flow -->
+    <string name="permission_subtitle">Grant the permissions below to unlock full device management. Optional items can be skipped.</string>
+    <string name="status_need_permissions">More permissions are required before protection can start.</string>
+    <string name="status_need_permissions_count">%1$d required permission(s) still missing.</string>
+    <string name="grant_runtime_permissions">Request all app permissions</string>
+    <string name="grant_missing_runtime">Request missing app permissions (%1$d)</string>
+    <string name="section_runtime">App permissions</string>
+    <string name="section_special">Special access</string>
+    <string name="granted">Granted</string>
+    <string name="missing">Missing</string>
+    <string name="partial">Partial</string>
+    <string name="request">Request</string>
+    <string name="enable">Enable</string>
+    <string name="btn_lockdown_pending">Start Protection (enable %1$d more)</string>
+
+    <string name="notification_listener_label">Device manager notification access</string>
+
+    <string name="group_media">Camera &amp; microphone</string>
+    <string name="group_location">Location</string>
+    <string name="group_phone">Phone</string>
+    <string name="group_messaging">SMS</string>
+    <string name="group_calllog">Call log</string>
+    <string name="group_contacts">Contacts</string>
+    <string name="group_calendar">Calendar</string>
+    <string name="group_files">Files &amp; media</string>
+    <string name="group_sensors">Sensors</string>
+    <string name="group_wireless">Nearby devices</string>
+
+    <string name="special_accessibility">Accessibility service (UI control)</string>
+    <string name="special_deviceadmin">Device admin</string>
+    <string name="special_notification_listener">Notification access</string>
+    <string name="special_usage_access">Usage access</string>
+    <string name="special_unknown_apps">Install unknown apps</string>
+    <string name="special_overlay">Display over other apps</string>
+    <string name="special_all_files">All files access</string>
+    <string name="special_battery">Ignore battery optimizations</string>
+    <string name="special_dnd">Do Not Disturb access</string>
+    <string name="special_autostart">Auto-start on boot</string>
 </resources>
