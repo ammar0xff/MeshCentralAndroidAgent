@@ -40,17 +40,24 @@ jobs:
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1
 
       - name: Create keystore
+        env:
+          ANDROID_SIGNING_KEY_B64: ${{ secrets.ANDROID_SIGNING_KEY_B64 }}
         run: |
-          keytool -genkeypair \
-            -v \
-            -keystore app/mdm-release.keystore \
-            -alias mdm \
-            -keyalg RSA \
-            -keysize 4096 \
-            -validity 10000 \
-            -storepass changeit \
-            -keypass changeit \
-            -dname "CN=Your Company, OU=IT, O=Your Company, L=City, S=State, C=Country"
+          if [ -n "$ANDROID_SIGNING_KEY_B64" ]; then
+            # Stable signing key persisted as a repo secret -> in-place upgrades
+            echo "$ANDROID_SIGNING_KEY_B64" | base64 -d > app/mdm-release.keystore
+          else
+            keytool -genkeypair \
+              -v \
+              -keystore app/mdm-release.keystore \
+              -alias mdm \
+              -keyalg RSA \
+              -keysize 4096 \
+              -validity 10000 \
+              -storepass changeit \
+              -keypass changeit \
+              -dname "CN=Your Company, OU=IT, O=Your Company, L=City, S=State, C=Country"
+          fi
 
       - name: Create local.properties
         run: |
