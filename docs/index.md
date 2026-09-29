@@ -46,6 +46,8 @@ time.
   validation, approval flow, and lifecycle behavior.
 - [Creating a release](releasing.md) - versioning, signing, GitHub Actions, and
   publishing APK and AAB artifacts.
+- [Master roadmap](roadmap.md) - prioritized P0-P3 feature and fix plan across
+  agent, plugin, and fleet work.
 - [Main project README](../README.md) - requirements and local build commands.
 
 ## Project Links
