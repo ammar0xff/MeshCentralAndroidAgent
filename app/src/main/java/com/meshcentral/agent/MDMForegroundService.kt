@@ -397,7 +397,10 @@ class MDMForegroundService : Service(), MDMAgentHost {
     override fun onDestroy() {
         super.onDestroy()
         // NOTE: a system-initiated destroy (low memory, OEM reaper) intentionally
-        // leaves the watchdog alarm armed so the agent comes back.
+        // leaves the watchdog alarm armed so the agent comes back. `running` must
+        // be cleared here too: otherwise the next watchdog tick sees running=true,
+        // ensureRunning() no-ops, and no replacement alarm is ever armed.
+        running = false
         scheduler?.shutdown()
         scheduler = null
         meshAgent?.Stop()

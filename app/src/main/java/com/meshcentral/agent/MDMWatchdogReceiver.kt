@@ -61,5 +61,9 @@ class MDMWatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Log.i(TAG, "Watchdog tick")
         MDMForegroundService.ensureRunning(context)
+        // Always re-arm: the service may come up (its own scheduleWatchdog() runs
+        // asynchronously) or the start may fail entirely. schedule() replaces the
+        // same PendingIntent, so this never stacks duplicate alarms.
+        schedule(context)
     }
 }
