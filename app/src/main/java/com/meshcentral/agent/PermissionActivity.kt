@@ -206,9 +206,15 @@ class PermissionActivity : AppCompatActivity() {
         }
 
         val state = TextView(this).apply {
-            text = if (granted) getString(R.string.granted) else getString(R.string.missing)
+            val manualAutoStart =
+                sa.id == "autoStart" && MDMPermissions.hasUnacknowledgedAutoStart(this@PermissionActivity)
+            text = when {
+                granted -> getString(R.string.granted)
+                manualAutoStart -> getString(R.string.special_autostart_manual)
+                else -> getString(R.string.missing)
+            }
             textSize = 13f
-            setTextColor(stateColor(granted, false))
+            setTextColor(stateColor(granted, manualAutoStart))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
@@ -306,7 +312,14 @@ class PermissionActivity : AppCompatActivity() {
             }
             else -> {
                 val intent = MDMPermissions.settingsIntentFor(this, id)
-                if (intent != null) startActivity(intent)
+                if (intent != null) {
+                    startActivity(intent)
+                    // HONOR/Huawei cannot report the auto-start toggle; opening the
+                    // vendor manager is the user's confirmation that it is set.
+                    if (id == "autoStart" && MDMPermissions.vendorAutoStartInstalled(this)) {
+                        MDMPermissions.acknowledgeAutoStart(this)
+                    }
+                }
             }
         }
     }

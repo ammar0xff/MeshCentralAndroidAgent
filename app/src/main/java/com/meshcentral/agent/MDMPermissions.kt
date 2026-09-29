@@ -31,6 +31,9 @@ object MDMPermissions {
     const val REQ_LOCATION_BACKGROUND = 4102
     const val REQ_NOTIFICATION = 4103
 
+    private const val PREFS = "mdm_permissions"
+    private const val PREF_AUTOSTART_ACKED = "mdm_autostart_acked"
+
     data class RuntimeGroup(
         val id: String,
         val permissions: List<String>,
@@ -201,10 +204,16 @@ object MDMPermissions {
         },
         SpecialAccess("doNotDisturb", false) { dndGranted(it) },
         // Only HONOR/Huawei actually manage "auto-start on boot" per-app; everywhere
-        // else the row is satisfied so it just drops out of the list.
-        SpecialAccess("autoStart", false) {
-            val m = Build.MANUFACTURER.lowercase()
-            !(m.contains("huawei") || m.contains("honor"))
+        // else the row is satisfied so it just drops out of the list. The vendor
+        // toggle cannot be read programmatically, so once the user opens the vendor
+        // manager we record a local acknowledgment and treat the row as granted.
+        SpecialAccess("autoStart", false) { ctx ->
+            if (isHonorFamily()) {
+                ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .getBoolean(PREF_AUTOSTART_ACKED, false)
+            } else {
+                true
+            }
         }
     )
 
@@ -268,8 +277,7 @@ object MDMPermissions {
             } else null
         "doNotDisturb" -> Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
         "autoStart" -> {
-            val manufacturer = Build.MANUFACTURER.lowercase()
-            val vendorLauncher = if (manufacturer.contains("huawei") || manufacturer.contains("honor")) {
+            val vendorLauncher: ComponentName? = if (isHonorFamily()) {
                 listOf(
                     ComponentName(
                         "com.huawei.systemmanager",
@@ -288,6 +296,34 @@ object MDMPermissions {
         }
         else -> null
     }
+
+    fun isHonorFamily(): Boolean {
+        val m = Build.MANUFACTURER.lowercase()
+        return m.contains("huawei") || m.contains("honor")
+    }
+
+    /** True when the HONOR/Huawei startup-manager is present, so launching its intent is meaningful. */
+    fun vendorAutoStartInstalled(context: Context): Boolean {
+        if (!isHonorFamily()) return false
+        return listOf(
+            ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+            ComponentName("com.honor.systemmanager", "com.honor.systemmanager.startupmgr.ui.StartupNormalAppListActivity")
+        ).any { cn ->
+            context.packageManager.resolveActivity(Intent().setComponent(cn), 0) != null
+        }
+    }
+
+    fun acknowledgeAutoStart(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AUTOSTART_ACKED, true)
+            .apply()
+    }
+
+    /** The HONOR/Huawei auto-start row cannot be verified programmatically; a manual ack is pending. */
+    fun hasUnacknowledgedAutoStart(context: Context): Boolean =
+        isHonorFamily() && !context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AUTOSTART_ACKED, false)
 
     fun isDeviceOwner(context: Context): Boolean {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager ?: return false
