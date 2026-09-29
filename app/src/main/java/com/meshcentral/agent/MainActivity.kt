@@ -100,9 +100,7 @@ var g_auth_url : Uri? = null
 
 class MainActivity : AppCompatActivity(), MDMAgentHost {
     var alert : AlertDialog? = null
-    lateinit var notificationChannel: NotificationChannel
     lateinit var notificationManager: NotificationManager
-    lateinit var builder: Notification.Builder
     private var pendingConnectionUserInitiated: Boolean? = null
     private var localNetworkPermissionRequested = false
 
@@ -593,19 +591,26 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
                 PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
         }
 
+        val builder: Notification.Builder
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationChannel = NotificationChannel(getString(R.string.default_notification_channel_id), "MeshCentral Agent Channel", NotificationManager.IMPORTANCE_DEFAULT)
+            val notificationChannel = NotificationChannel(getString(R.string.default_notification_channel_id), "MeshCentral Agent Channel", NotificationManager.IMPORTANCE_DEFAULT)
             notificationChannel.lightColor = Color.BLUE
             notificationChannel.enableVibration(true)
             notificationManager.createNotificationChannel(notificationChannel)
             builder = Notification.Builder(this, getString(com.meshcentral.agent.R.string.default_notification_channel_id))
-                .setSmallIcon(R.drawable.ic_message)
-                .setContentTitle(title)
-                .setContentText(body)
-                .setAutoCancel(true)
-                //.setLargeIcon(BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher))
-                .setContentIntent(pendingIntent)
+        } else {
+            // Channel-less builder for API 23-25; the lateinit field this used to
+            // write was never initialized on those versions and crashed .build().
+            @Suppress("DEPRECATION")
+            builder = Notification.Builder(this)
         }
+        builder
+            .setSmallIcon(R.drawable.ic_message)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setAutoCancel(true)
+            //.setLargeIcon(BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher))
+            .setContentIntent(pendingIntent)
 
         // Add notification
         notificationManager.notify(0, builder.build())

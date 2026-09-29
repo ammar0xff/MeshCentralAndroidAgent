@@ -819,7 +819,7 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
                     var alertArgs = JSONArray()
                     alertArgs.put("Alert")
                     alertArgs.put(splitCmd[1])
-                    logServerEventEx(18, alertArgs, "Displaying message box, title=" + splitCmd[2] + ", message=" + splitCmd[1], jsoncmd);
+                    logServerEventEx(18, alertArgs, "Displaying message box, title=Alert, message=" + splitCmd[1], jsoncmd);
 
                     // Show the alert
                     parent.showAlertMessage("Alert", splitCmd[1])
