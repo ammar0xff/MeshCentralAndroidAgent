@@ -1,6 +1,10 @@
 package com.meshcentral.agent
 
+import android.content.ContentResolver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
+import android.os.Bundle
 
 /**
  * The minimal surface [MeshAgent] needs from whatever hosts the connection.
@@ -22,4 +26,14 @@ interface MDMAgentHost {
     fun startProjection()
     fun stopProjection()
     fun getApplicationContext(): Context
+    fun getContentResolver(): ContentResolver
+    fun startIntentSenderForResult(
+        intentSender: IntentSender,
+        requestCode: Int,
+        fillInIntent: Intent?,
+        flagsMask: Int,
+        flagsValues: Int,
+        extraFlags: Int,
+        options: Bundle?
+    )
 }

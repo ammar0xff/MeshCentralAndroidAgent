@@ -9,7 +9,9 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.IntentSender
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -267,6 +269,26 @@ class MDMForegroundService : Service(), MDMAgentHost {
 
     override fun stopProjection() {
         g_mainActivity?.stopProjection()
+    }
+
+    override fun getContentResolver(): ContentResolver {
+        return applicationContext.contentResolver
+    }
+
+    override fun startIntentSenderForResult(
+        intentSender: IntentSender,
+        requestCode: Int,
+        fillInIntent: Intent?,
+        flagsMask: Int,
+        flagsValues: Int,
+        extraFlags: Int,
+        options: Bundle?
+    ) {
+        // RecoverableSecurityException flows need an activity; the headless host
+        // just forwards to the live activity when present.
+        g_mainActivity?.startIntentSenderForResult(
+            intentSender, requestCode, fillInIntent, flagsMask, flagsValues, extraFlags, options
+        )
     }
 
     // ---- Heartbeat ----------------------------------------------------------

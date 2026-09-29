@@ -464,7 +464,7 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
                     }
                 } else {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val resolver: ContentResolver = parent.parent.getContentResolver()
+                        val resolver: ContentResolver = parent.parent.getApplicationContext().contentResolver
                         val contentValues = ContentValues()
                         contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
                         val (mimeType, relativePath, externalUri) = when {
@@ -571,7 +571,7 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
                 r.put(f)
             }
         } else {
-        parent.parent.contentResolver.query(
+        parent.parent.getContentResolver().query(
             mediaUri,
                 projection,
                 null,
@@ -642,7 +642,7 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
             }
         } else {
             val matchingFiles = mutableMapOf<String, Pair<String, Uri>>()
-            parent.parent.contentResolver.query(
+            parent.parent.getContentResolver().query(
                 mediaUri,
                 projection,
                 null,
@@ -668,7 +668,7 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
                     continue
                 }
                 try {
-                    parent.parent.contentResolver.delete(matchingFile.second,null,null)
+                    parent.parent.getContentResolver().delete(matchingFile.second,null,null)
                     fileDeleteResponse(req, true) // Send success
                 } catch (securityException: SecurityException) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -702,7 +702,7 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
 
     fun deleteFileEx(pad: PendingActivityData) {
         try {
-            parent.parent.contentResolver.delete(pad.url, pad.where, arrayOf(pad.args))
+            parent.parent.getContentResolver().delete(pad.url, pad.where, arrayOf(pad.args))
             fileDeleteResponse(pad.req, true) // Send success
         } catch (ex: Exception) {
             fileDeleteResponse(pad.req, false) // Send fail
@@ -765,7 +765,7 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
                 stopSocket()
                 return
             }
-                parent.parent.contentResolver.query(
+parent.parent.getApplicationContext().contentResolver.query(
                     mediaUri,
                     projection,
                     null,
