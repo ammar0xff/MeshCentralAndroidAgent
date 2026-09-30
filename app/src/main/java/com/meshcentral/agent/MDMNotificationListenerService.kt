@@ -65,12 +65,14 @@ class MDMNotificationListenerService : NotificationListenerService() {
                 entry.put("title", extras.getCharSequence("android.title")?.toString() ?: "")
                 entry.put("text", extras.getCharSequence("android.text")?.toString() ?: "")
             }
+            entry.put("ts", System.currentTimeMillis())
             synchronized(this) {
                 val next = ArrayList(buffer)
                 next.add(entry)
                 while (next.size > MAX_ENTRIES) next.removeAt(0)
                 buffer = next
             }
+            MDMForegroundService.pushNotificationEvent(entry)   // live feed (2.2)
         } catch (ex: Exception) {
             Log.w(TAG, "Unable to record notification", ex)
         }

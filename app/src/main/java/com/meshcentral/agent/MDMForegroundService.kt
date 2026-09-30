@@ -64,8 +64,19 @@ class MDMForegroundService : Service(), MDMAgentHost {
         @Volatile
         private var timelineSink: ((JSONObject) -> Unit)? = null
 
+        /**
+         * Sink for pushed notification listener events (2.2); same lifetime as
+         * [timelineSink], fed by MDMNotificationListenerService.
+         */
+        @Volatile
+        private var notifySink: ((JSONObject) -> Unit)? = null
+
         fun pushTimelineEvent(event: JSONObject) {
             timelineSink?.invoke(event)
+        }
+
+        fun pushNotificationEvent(event: JSONObject) {
+            notifySink?.invoke(event)
         }
 
         /** Idempotent: no-op when the service is already up. */
@@ -129,7 +140,8 @@ class MDMForegroundService : Service(), MDMAgentHost {
         super.onCreate()
         Log.i(TAG, "Service created")
         createNotificationChannel()
-        timelineSink = { ev -> offerEvent(ev) }
+        timelineSink = { ev -> offerEvent("mdmevent", ev) }
+        notifySink = { ev -> offerEvent("mdmnotify", ev) }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -429,7 +441,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
 
     // ---- Timeline events (2.5) -----------------------------------------------
 
-    private val pendingEvents = ArrayList<JSONObject>()
+    private val pendingEvents = ArrayList<Pair<String, JSONObject>>()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -440,6 +452,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
                 else -> return
             }
             offerEvent(
+                "mdmevent",
                 JSONObject().apply {
                     put("type", type)
                     put("ts", System.currentTimeMillis())
@@ -448,11 +461,11 @@ class MDMForegroundService : Service(), MDMAgentHost {
         }
     }
 
-    /** Queue a timeline event; drains immediately when connected. */
-    private fun offerEvent(event: JSONObject) {
+    /** Queue a timeline or notification event; drains immediately when connected. */
+    private fun offerEvent(cmd: String, event: JSONObject) {
         synchronized(pendingEvents) {
             if (pendingEvents.size >= 50) pendingEvents.removeAt(0) // drop oldest when offline
-            pendingEvents.add(event)
+            pendingEvents.add(Pair(cmd, event))
         }
         flushEvents()
     }
@@ -465,7 +478,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
             val ev = synchronized(pendingEvents) {
                 if (pendingEvents.isEmpty()) null else pendingEvents.removeAt(0)
             } ?: break
-            agent.pushMdmResult("mdmevent", "evt-" + ev.optLong("ts"), ev)
+            agent.pushMdmResult(ev.first, "evt-" + ev.second.optLong("ts"), ev.second)
         }
     }
 
@@ -504,6 +517,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
         // ensureRunning() no-ops, and no replacement alarm is ever armed.
         running = false
         timelineSink = null
+        notifySink = null
         try { unregisterReceiver(screenReceiver) } catch (ex: Exception) { }
         scheduler?.shutdown()
         scheduler = null
