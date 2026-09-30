@@ -712,6 +712,18 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
         }
     }
 
+    // Unsolicited mdmResult push (heartbeat / scheduled report snapshot): a
+    // message the server never asked for. Rides the main websocket so it works
+    // with no desktop tunnel open, which is the normal state for a phone.
+    fun pushMdmResult(cmd: String, seq: String, result: JSONObject) {
+        val r = JSONObject()
+        r.put("action", "mdmResult")
+        r.put("cmd", cmd)
+        r.put("seq", seq)
+        r.put("result", result)
+        if (_webSocket != null) { _webSocket?.send(r.toString().toByteArray().toByteString()) }
+    }
+
     // Send 2FA authentication URL and approval/reject back
     fun send2faAuth(url: Uri, approved: Boolean) {
         val r = JSONObject()

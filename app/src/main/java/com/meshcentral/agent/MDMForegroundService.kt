@@ -44,6 +44,9 @@ class MDMForegroundService : Service(), MDMAgentHost {
         private const val HEARTBEAT_INTERVAL = 30L
         private const val RECONNECT_THROTTLE_MS = 45_000L
 
+        /** Heartbeats between scheduled report events (120 x 30 s = 60 min). */
+        private const val REPORT_INTERVAL_TICKS = 120
+
         const val ACTION_START = "com.meshcentral.agent.START"
         const val ACTION_STOP = "com.meshcentral.agent.STOP"
         const val ACTION_RECONNECT = "com.meshcentral.agent.RECONNECT"
@@ -106,6 +109,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
     private var scheduler: ScheduledExecutorService? = null
     private var isForeground = false
     private var lastConnectAttempt = 0L
+    private var reportTicksLeft = REPORT_INTERVAL_TICKS
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
@@ -182,6 +186,11 @@ class MDMForegroundService : Service(), MDMAgentHost {
         val agent = meshAgent
         if (agent != null && agent.state == 3) {
             sendHeartbeat()
+            reportTicksLeft--
+            if (reportTicksLeft <= 0) {
+                reportTicksLeft = REPORT_INTERVAL_TICKS
+                sendScheduledReport(agent)
+            }
         }
     }
 
@@ -313,15 +322,88 @@ class MDMForegroundService : Service(), MDMAgentHost {
 
     // ---- Heartbeat ----------------------------------------------------------
 
+    /**
+     * Pushes the current snapshot to the server as an unsolicited mdmResult.
+     * The old tunnel-only ping never reached the plugin (it needs an open
+     * desktop tunnel, which a phone almost never has), so this rides the main
+     * websocket instead and carries the full battery/storage/location payload.
+     */
     private fun sendHeartbeat() {
-        if (meshAgent == null || meshAgent?.state != 3) return
-        val deviceInfo = JSONObject().apply {
-            put("type", "mdm_heartbeat")
-            put("battery", getBatteryLevel())
-            put("storage", getStorageInfo())
+        val agent = meshAgent
+        if (agent == null || agent.state != 3) return
+        val payload = JSONObject().apply {
+            put("battery", batterySnapshot())
+            put("storage", storageSnapshot())
+            put("location", locationSnapshot())
             put("online", true)
         }
-        meshAgent?.tunnels?.getOrNull(0)?.sendCtrlResponse(deviceInfo)
+        agent.pushMdmResult("heartbeat", "hb-" + System.currentTimeMillis(), payload)
+    }
+
+    /** Hourly report: a node event (msgid 60) in the MeshCentral event log. */
+    private fun sendScheduledReport(agent: MeshAgent) {
+        try {
+            val battery = batterySnapshot()
+            val storage = storageSnapshot()
+            val location = locationSnapshot()
+            val sb = StringBuilder("MDM report: battery ")
+                .append(battery.optInt("level", -1)).append('%')
+            if (battery.optBoolean("charging")) sb.append(" charging")
+            sb.append(", storage ").append(gb(storage.optLong("available")))
+                .append(" free of ").append(gb(storage.optLong("total")))
+            val lat = location.optDouble("latitude", Double.NaN)
+            if (!lat.isNaN()) {
+                sb.append(", location ")
+                    .append(coord(lat)).append(',')
+                    .append(coord(location.optDouble("longitude")))
+            } else {
+                sb.append(", location unavailable")
+            }
+            agent.logServerEventEx(60, null, sb.toString(), null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Scheduled report failed", e)
+        }
+    }
+
+    private fun batterySnapshot(): JSONObject {
+        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val level = intent?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = intent?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val status = intent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == android.os.BatteryManager.BATTERY_STATUS_FULL
+        return JSONObject().apply {
+            put("level", if (level >= 0 && scale > 0) (level * 100 / scale) else -1)
+            put("charging", charging)
+        }
+    }
+
+    private fun storageSnapshot(): JSONObject {
+        val stat = android.os.StatFs(filesDir.path)
+        return JSONObject().apply {
+            put("available", stat.availableBytes)
+            put("total", stat.totalBytes)
+        }
+    }
+
+    private fun locationSnapshot(): JSONObject {
+        return try {
+            MDMAbilities.location(applicationContext, 300_000L)
+        } catch (e: Exception) {
+            JSONObject().apply { put("error", e.toString()) }
+        }
+    }
+
+    private fun gb(bytes: Long): String {
+        val tenths = bytes / 100_000_000L   // decimal GB with one fractional digit
+        return "${tenths / 10}.${tenths % 10} GB"
+    }
+
+    private fun coord(v: Double): String {
+        val scaled = Math.round(v * 10000.0)
+        val sign = if (scaled < 0) "-" else ""
+        val a = Math.abs(scaled)
+        return "$sign${a / 10000}.${(a % 10000).toString().padStart(4, '0')}"
     }
 
     // ---- Notification --------------------------------------------------------
@@ -347,20 +429,6 @@ class MDMForegroundService : Service(), MDMAgentHost {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
-    }
-
-    private fun getBatteryLevel(): Int {
-        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = intent?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = intent?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
-        return if (level >= 0 && scale > 0) (level * 100 / scale) else -1
-    }
-
-    private fun getStorageInfo(): String {
-        val stat = android.os.StatFs(filesDir.path)
-        val available = stat.availableBytes
-        val total = stat.totalBytes
-        return "$available/$total"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
