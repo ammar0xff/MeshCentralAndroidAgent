@@ -40,6 +40,8 @@ Protects existing guarantees; nothing new is visible to users.
 
 ## P3 - Platform and enterprise (needs device owner or zero-touch)
 
+Skipped by user decision (2026-09-30): no enrollment channel will be pursued; 3.1–3.4 stay out of scope indefinitely.
+
 | # | Item | Gate |
 |---|------|------|
 | 3.1 | Android Enterprise QR / zero-touch device-owner enrollment | Enrollment channel |
