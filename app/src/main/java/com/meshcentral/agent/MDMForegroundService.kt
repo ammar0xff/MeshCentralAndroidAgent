@@ -44,6 +44,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
         private const val CHANNEL_ID = "mdm_foreground_channel"
         private const val HEARTBEAT_INTERVAL = 30L
         private const val RECONNECT_THROTTLE_MS = 45_000L
+        private const val EVENT_QUEUE_MAX = 50
 
         /** Heartbeats between scheduled report events (120 x 30 s = 60 min). */
         private const val REPORT_INTERVAL_TICKS = 120
@@ -441,7 +442,11 @@ class MDMForegroundService : Service(), MDMAgentHost {
 
     // ---- Timeline events (2.5) -----------------------------------------------
 
-    private val pendingEvents = ArrayList<Pair<String, JSONObject>>()
+    // Two independent bounded queues: a burst of notification-listener events
+    // must not evict queued screen/keyguard timeline events while offline, and
+    // vice versa. Each stream drops only its own oldest entry at the cap.
+    private val pendingTimeline = ArrayList<JSONObject>()
+    private val pendingNotify = ArrayList<JSONObject>()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -463,9 +468,10 @@ class MDMForegroundService : Service(), MDMAgentHost {
 
     /** Queue a timeline or notification event; drains immediately when connected. */
     private fun offerEvent(cmd: String, event: JSONObject) {
-        synchronized(pendingEvents) {
-            if (pendingEvents.size >= 50) pendingEvents.removeAt(0) // drop oldest when offline
-            pendingEvents.add(Pair(cmd, event))
+        val queue = if (cmd == "mdmnotify") pendingNotify else pendingTimeline
+        synchronized(queue) {
+            if (queue.size >= EVENT_QUEUE_MAX) queue.removeAt(0) // drop oldest when offline
+            queue.add(event)
         }
         flushEvents()
     }
@@ -474,11 +480,16 @@ class MDMForegroundService : Service(), MDMAgentHost {
     private fun flushEvents() {
         val agent = meshAgent
         if (agent == null || agent.state != 3) return
+        flushQueue(agent, "mdmevent", pendingTimeline)
+        flushQueue(agent, "mdmnotify", pendingNotify)
+    }
+
+    private fun flushQueue(agent: MeshAgent, cmd: String, queue: ArrayList<JSONObject>) {
         while (true) {
-            val ev = synchronized(pendingEvents) {
-                if (pendingEvents.isEmpty()) null else pendingEvents.removeAt(0)
+            val ev = synchronized(queue) {
+                if (queue.isEmpty()) null else queue.removeAt(0)
             } ?: break
-            agent.pushMdmResult(ev.first, "evt-" + ev.second.optLong("ts"), ev.second)
+            agent.pushMdmResult(cmd, "evt-" + ev.optLong("ts"), ev)
         }
     }
 

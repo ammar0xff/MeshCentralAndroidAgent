@@ -56,6 +56,18 @@ Skipped by user decision (2026-09-30): no enrollment channel will be pursued; 3.
 - Bypassing MediaProjection / autostart consent: enforced by the OS and OEMs.
 - OEM autostart re-entry beyond the HONOR/Huawei `mdm://ack` flow.
 
+## Quality gates (2026-09-30)
+
+Audit batch: CI keystore step fails loud when `ANDROID_SIGNING_KEY_B64` is
+missing (no throwaway-key signature that would reissue every installed agent's
+node id), JVM unit tests wired into CI (`testDebugUnitTest` before the APK
+build), offline event queues split per stream so a notification burst cannot
+evict timeline events (50 each), feed rows render the raw event word, and
+dead agent node records were pruned from `meshcentral.db` (3 retired ids,
+backup kept on the host). Standing suites: `test-protocol.js` (21 sections),
+`ProtocolValidationTest` (12 JVM tests), 22 screenshot checks, design gate
+100/100.
+
 ## Cross-cutting rules
 
 - Differentiation line: core MeshCentral already does desktop view, files, and a
