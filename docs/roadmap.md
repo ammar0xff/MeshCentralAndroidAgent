@@ -10,11 +10,11 @@ Protects existing guarantees; nothing new is visible to users.
 
 | # | Item | Why | Effort |
 |---|------|-----|--------|
-| 0.1 | Watchdog re-arm gap: reset `running` in `MDMForegroundService.onDestroy`, make `MDMWatchdogReceiver` re-arm itself on every tick, make `ensureRunning()` self-healing | A system-initiated destroy leaves `running=true`, so the next watchdog tick no-ops and no new alarm is armed; the resurrection chain dies until reboot | M |
-| 0.2 | Fix `HiddenLaunchReceiver`: accept `mdmagent://setup` in addition to secret code `3664` | Manifest registers only `mdmagent://setup`; no input matched the receiver, so a hidden app icon left no re-entry path | S |
-| 0.3 | `showNotification` lateinit crash on API 23-25 and headless FCM paths; console `alert` `splitCmd[2]` out-of-bounds | Crash / failed-command paths on supported devices | S |
-| 0.4 | Ship pending fixes: `MeshAgent.kt` verbatim string-seq echo + `strings.xml` em-dash | Protocol correctness (seq correlation for string sequence ids) | S |
-| 0.5 | Unify signing secret names (`ANDROID_SIGNING_KEY_B64` vs `ANDROID_KEYSTORE_BASE64`) | Tag-release workflow reads a secret name CI never sets; tag releases fail | S |
+| 0.1 | Watchdog re-arm gap: reset `running` in `MDMForegroundService.onDestroy`, make `MDMWatchdogReceiver` re-arm itself on every tick, make `ensureRunning()` self-healing | Shipped (1153934): `running` cleared on service destroy, watchdog receiver re-arms on every tick, `ensureRunning()` self-heals; the resurrection chain survives system-initiated destroys | M |
+| 0.2 | Fix `HiddenLaunchReceiver`: accept `mdmagent://setup` in addition to secret code `3664` | Shipped (d5335ad): receiver accepts the registered `mdmagent://setup` link; hidden icon has a working re-entry path again | S |
+| 0.3 | `showNotification` lateinit crash on API 23-25 and headless FCM paths; console `alert` `splitCmd[2]` out-of-bounds | Shipped (c61f68e): notification path made null-safe for headless FCM/API 23-25, `alert` no longer indexes past `splitCmd` | S |
+| 0.4 | Ship pending fixes: `MeshAgent.kt` verbatim string-seq echo + `strings.xml` em-dash | Shipped (0b1f983): mdm seqs echoed verbatim (string seqs collapsed to 0 and broke correlation), em-dash removed from autostart string | S |
+| 0.5 | Unify signing secret names (`ANDROID_SIGNING_KEY_B64` vs `ANDROID_KEYSTORE_BASE64`) | Shipped (da367a6): release workflow reads the repo-stable `ANDROID_KEYSTORE` secrets path; tag releases no longer fail on an unset secret name | S |
 | 0.6 | Credential rotation (SSH password, MeshCentral admin, node credentials) | Shipped (2026-09-30): MeshCentral admin password rotated via `meshcentral --resetaccount` + container restart, verified new-credential → 200 and old-credential → 401 on `/mdmpanel`; SSH password deliberately left unchanged per user decision (2026-09-30); node credentials not rotated (agent identity is per-install) | S |
 | 0.7 | adb E2E always-on gate: install final APK, re-grant permissions, screen-locked stability, live panel commands, 10-minute idle | The only remaining proof of the core promise; unlocks Tier 1 verification. Skipped on request (2026-09-30); credential rotation (0.6) shipped same day | M |
 
@@ -34,7 +34,7 @@ Protects existing guarantees; nothing new is visible to users.
 |---|------|-------|--------|
 | 2.1 | File manager tab (reuse `ls`/`rm`/`upload`/`download` protocol; roots Sdcard, Images, Audio, Videos) | Do not rebuild core file views beyond device-native roots | M |
 | 2.2 | Live notification feed: push listener snapshots instead of 5-second polling | Requires notification-access permission plus tunnel or a new ws event | L |
-| 2.3 | Device picker outside the console context plus mesh-level fan-out (one command to all nodes) | Server-side batching via `GetConnectivityState` / `wsagents` | M |
+| 2.3 | Device picker outside the console context plus mesh-level fan-out (one command to all nodes) | Shipped (v0.5.0): `GET /mdmpanel/api/devices` lists server-known nodes (name from the db record, reachability from `wsagents` + `GetConnectivityState`, `mdm` capability from the node's `agent.core` identity) behind a header picker; `POST /mdmpanel/api/fanout` sends one command to every online Android device with per-target derived seqs, skipped nodes reported by reason (`offline` / `not an Android agent`); fleet status (`nodeid=*`) aggregates Android devices; live-verified 2026-09-30 (1 target, 5 desktop nodes skipped, battery result correlated) | M |
 | 2.4 | Scheduled reports (battery/storage/location snapshots) and offline alerts surfaced as `log`/`msgid` events | Builds on `mdm_heartbeat` | M |
 | 2.5 | Keyguard / accessibility event streaming into a panel timeline | Replaces polling; enables automation rules later | M |
 
