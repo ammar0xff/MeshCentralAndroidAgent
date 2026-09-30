@@ -589,6 +589,24 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
                 "launchapp" -> response.put("result", MDMAccessibilityService.launchApp(args.optString("package")))
                 "clicknode" -> response.put("result", MDMAccessibilityService.clickNode(args.optString("nodeid")))
                 "settext" -> response.put("result", MDMAccessibilityService.setTextOnNode(args.optString("nodeid"), args.optString("text")))
+                "console" -> {
+                    // Bridge for the panel: {name, argv:[...]} runs one command
+                    // from the shared console dispatcher and returns its text.
+                    val name = args.optString("name")
+                    val argv = mutableListOf<String>()
+                    argv.add(name)
+                    val arr = args.optJSONArray("argv")
+                    if (arr != null) { for (i in 0 until arr.length()) { argv.add(arr.optString(i)) } }
+                    if (name == "") {
+                        response.put("result", JSONObject().put("error", "missing console command name"))
+                    } else {
+                        val line = argv.joinToString(" ")
+                        val eventArgs = JSONArray()
+                        eventArgs.put(line)
+                        logServerEventEx(17, eventArgs, "Processing console command: $line", json)
+                        response.put("result", runConsoleCommand(argv, json) ?: "Ok")
+                    }
+                }
                 else -> {
                     response.put("result", JSONObject().apply {
                         put("error", "Unknown mdm command: $cmd")
@@ -796,14 +814,24 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
 
         // Parse the incoming console command
         var splitCmd = parseArgString(cmdLine)
-        var cmd = splitCmd[0]
-        var r : String? = null
-        if (cmd == "") return
+        if (splitCmd.isEmpty() || splitCmd[0] == "") return
 
         // Log the incoming console command to the server
         var eventArgs = JSONArray()
         eventArgs.put(cmdLine)
         logServerEventEx(17, eventArgs, "Processing console command: $cmdLine", jsoncmd);
+
+        val r = runConsoleCommand(splitCmd, jsoncmd)
+        if (r != null) sendConsoleResponse(r, sessionid)
+    }
+
+    // Execute one parsed console command and return its textual answer, or null
+    // when the command has no answer. Shared by the MeshCentral console channel
+    // and the panel's mdm "console" bridge.
+    private fun runConsoleCommand(splitCmd: List<String>, jsoncmd: JSONObject?): String? {
+        var cmd = splitCmd[0]
+        var r : String? = null
+        if (cmd == "") return null
 
         when (cmd) {
             "help" -> {
@@ -1055,7 +1083,7 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
             }
         }
 
-        if (r != null) sendConsoleResponse(r, sessionid)
+        return r
     }
 
     fun sendConsoleResponse(r: String, sessionid: String?) {
