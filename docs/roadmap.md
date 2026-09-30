@@ -16,14 +16,14 @@ Protects existing guarantees; nothing new is visible to users.
 | 0.4 | Ship pending fixes: `MeshAgent.kt` verbatim string-seq echo + `strings.xml` em-dash | Protocol correctness (seq correlation for string sequence ids) | S |
 | 0.5 | Unify signing secret names (`ANDROID_SIGNING_KEY_B64` vs `ANDROID_KEYSTORE_BASE64`) | Tag-release workflow reads a secret name CI never sets; tag releases fail | S |
 | 0.6 | Credential rotation (SSH password, MeshCentral admin, node credentials) | Standing security item, after E2E | S |
-| 0.7 | adb E2E always-on gate: install final APK, re-grant permissions, screen-locked stability, live panel commands, 10-minute idle | The only remaining proof of the core promise; unlocks Tier 1 verification | M |
+| 0.7 | adb E2E always-on gate: install final APK, re-grant permissions, screen-locked stability, live panel commands, 10-minute idle | The only remaining proof of the core promise; unlocks Tier 1 verification. Skipped on request (2026-09-30); rotate credentials (0.6) still pending a device session | M |
 
 ## P1 - Differentiation (agent features core MeshCentral cannot do)
 
 | # | Item | Notes | Effort |
 |---|------|-------|--------|
 | 1.1 | Remote control via accessibility: map desktop-view input commands (currently no-ops) to `tap`/`swipe`/`inputText` on device coordinates; add scroll, long-press, drag; key-event filtering | Turns the view-only KVM into true remote control; needs coordinate scaling and consent UX; largest single value item | L |
-| 1.2 | Panel exposure of existing console commands: `toast vibrate flash dial alert openurl openbrowser sysinfo netinfo storageinfo serverlog uistate` | Server-side work only; the commands already exist in the agent | M |
+| 1.2 | Panel exposure of existing console commands: `toast vibrate flash dial alert openurl openbrowser sysinfo netinfo storageinfo serverlog uistate` | Shipped (v0.3.0): agent shares its console dispatcher through a new mdm `console` bridge; the panel gained a typed Actions group plus four console-backed reads | M |
 | 1.3 | Wire `ACTION_REMOTE_COMMAND` (lock / wipe / notification-override) to an authenticated path; decide the fate of dead `removeLockdown`, `isDeviceOwner`, `PAIR_TOKEN` | Implemented but unreachable; needs an auth design (FCM auth or signed command) | M |
 | 1.4 | Screenshot command: one MediaProjection frame as base64 to the panel image renderer | Reuses the capture pipeline; consent prompt required | M |
 | 1.5 | Console spec sweep: `help` omits `kvmstart`/`kvmstop`; align advertised capabilities 12 vs 13; drop WebRTC remnants and `coredump` no-op advertising | Spec hygiene visible to the server UI | S |
