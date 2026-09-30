@@ -62,6 +62,8 @@ class MDMAccessibilityService : AccessibilityService() {
 
         fun inputText(text: String): Boolean = instance?.doInputText(text) == true
 
+        fun appendText(text: String): Boolean = instance?.doAppendText(text) == true
+
         fun pressKey(keyCode: Int): Boolean = instance?.doKey(keyCode) == true
 
         fun globalAction(actionId: String): Boolean = instance?.doGlobalAction(actionId) == true
@@ -163,12 +165,80 @@ class MDMAccessibilityService : AccessibilityService() {
     private fun doKey(keyCode: Int): Boolean = when (keyCode) {
         android.view.KeyEvent.KEYCODE_BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
         android.view.KeyEvent.KEYCODE_HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
+        android.view.KeyEvent.KEYCODE_ESCAPE -> performGlobalAction(GLOBAL_ACTION_BACK)
         android.view.KeyEvent.KEYCODE_ENTER -> try {
             focusedNode()?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
         } catch (ex: Exception) {
             false
         }
+        android.view.KeyEvent.KEYCODE_DEL, android.view.KeyEvent.KEYCODE_FORWARD_DEL -> doDeleteBackward()
+        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> moveSelectionBy(-1)
+        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> moveSelectionBy(1)
+        android.view.KeyEvent.KEYCODE_MOVE_HOME -> moveSelectionTo(0)
+        android.view.KeyEvent.KEYCODE_MOVE_END -> moveSelectionTo(Int.MAX_VALUE)
         else -> false
+    }
+
+    private fun editableNode(): AccessibilityNodeInfo? {
+        val node = focusedNode() ?: return null
+        if (!node.isEditable) return null
+        return node
+    }
+
+    private fun setSelection(node: AccessibilityNodeInfo, pos: Int): Boolean {
+        val args = Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, pos)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, pos)
+        }
+        return node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
+    }
+
+    private fun currentSelection(node: AccessibilityNodeInfo, length: Int): Pair<Int, Int> {
+        var start = node.textSelectionStart
+        var end = node.textSelectionEnd
+        if (start < 0 || end < 0) { start = length; end = length }
+        return start.coerceIn(0, length) to end.coerceIn(0, length)
+    }
+
+    private fun moveSelectionBy(delta: Int): Boolean {
+        val node = editableNode() ?: return false
+        val cur = node.text?.toString() ?: return false
+        val (start, end) = currentSelection(node, cur.length)
+        val target = if (start == end) (start + delta).coerceIn(0, cur.length)
+        else if (delta < 0) start else end
+        return setSelection(node, target)
+    }
+
+    private fun moveSelectionTo(target: Int): Boolean {
+        val node = editableNode() ?: return false
+        val cur = node.text?.toString() ?: return false
+        return setSelection(node, target.coerceIn(0, cur.length))
+    }
+
+    private fun doDeleteBackward(): Boolean {
+        val node = editableNode() ?: return false
+        val cur = node.text?.toString() ?: return false
+        if (cur.isEmpty()) return false
+        val (start, end) = currentSelection(node, cur.length)
+        val (ns, ne) = if (start != end) start to end
+        else if (start > 0) (start - 1) to start
+        else return false
+        val next = cur.substring(0, ns) + cur.substring(ne)
+        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, next) }
+        if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return false
+        setSelection(node, ns)
+        return true
+    }
+
+    private fun doAppendText(text: String): Boolean {
+        val node = editableNode() ?: return false
+        val cur = node.text?.toString() ?: ""
+        val (start, end) = currentSelection(node, cur.length)
+        val next = cur.substring(0, start) + text + cur.substring(end)
+        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, next) }
+        if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return false
+        setSelection(node, start + text.length)
+        return true
     }
 
     private fun doGlobalAction(actionId: String): Boolean {

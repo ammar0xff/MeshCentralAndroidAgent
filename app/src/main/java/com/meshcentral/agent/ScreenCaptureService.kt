@@ -28,6 +28,8 @@ import androidx.core.util.Pair
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import java.io.*
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 
 class ScreenCaptureService : Service() {
@@ -43,6 +45,10 @@ class ScreenCaptureService : Service() {
     private var mOrientationChangeCallback: ScreenCaptureService.OrientationChangeCallback? = null
     var mWidth = 0
     var mHeight = 0
+
+    // One-shot frame capture for the mdm "screenshot" command.
+    @Volatile private var snapshotLatch: CountDownLatch? = null
+    @Volatile private var snapshotBytes: ByteArray? = null
 
     // Tile data
     private var tilesWide : Int = 0
@@ -69,8 +75,9 @@ class ScreenCaptureService : Service() {
 
             try {
                 image = mImageReader!!.acquireLatestImage()
-                // Skip this image if null or websocket push-back is high
-                if ((image != null) && (checkDesktopTunnelPushback() < 65535) && (meshAgent?.tunnels?.getOrNull(0) != null)) {
+                val snapLatch = snapshotLatch
+                val process = (checkDesktopTunnelPushback() < 65535) && (meshAgent?.tunnels?.getOrNull(0) != null)
+                if ((image != null) && (process || snapLatch != null)) {
                     val planes: Array<Plane> = image.getPlanes()
                     val buffer = planes[0].buffer
                     val pixelStride = planes[0].pixelStride
@@ -81,6 +88,17 @@ class ScreenCaptureService : Service() {
                     bitmap = Bitmap.createBitmap(mWidth + rowPadding / pixelStride, mHeight, Bitmap.Config.ARGB_8888)
                     bitmap.copyPixelsFromBuffer(buffer)
 
+                    // Fulfil a pending screenshot request against the full-resolution frame.
+                    if (snapLatch != null) {
+                        snapshotBytes = try {
+                            val out = ByteArrayOutputStream()
+                            bitmap!!.compress(Bitmap.CompressFormat.JPEG, 60, out)
+                            out.toByteArray()
+                        } catch (e: Exception) { null }
+                        snapLatch.countDown()
+                    }
+
+                    if (process) {
                     // Resize the bitmap if needed
                     if (g_desktop_scalingLevel != 1024) {
                         val newWidth = (mWidth * g_desktop_scalingLevel) / 1024
@@ -146,12 +164,33 @@ class ScreenCaptureService : Service() {
                             if (sendx != -1) { sendSubBitmapRow(bitmap, sendx, sendy, sendw); }
                         }
                     }
+                    } // if (process)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
             if (bitmap != null) { bitmap.recycle() }
             if (image != null) { image.close() }
+        }
+    }
+
+    /**
+     * Capture the current frame as JPEG. Waits for the next image from the
+     * projection; returns null when no frame arrives in time (screen static,
+     * projection stopped, or reader torn down).
+     */
+    fun captureSnapshotJpeg(timeoutMs: Long): ByteArray? {
+        if (mImageReader == null) return null
+        snapshotBytes = null
+        val latch = CountDownLatch(1)
+        snapshotLatch = latch
+        try {
+            if (!latch.await(timeoutMs, TimeUnit.MILLISECONDS)) return null
+            return snapshotBytes
+        } catch (e: InterruptedException) {
+            return null
+        } finally {
+            snapshotLatch = null
         }
     }
 

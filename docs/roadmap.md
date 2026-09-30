@@ -22,11 +22,11 @@ Protects existing guarantees; nothing new is visible to users.
 
 | # | Item | Notes | Effort |
 |---|------|-------|--------|
-| 1.1 | Remote control via accessibility: map desktop-view input commands (currently no-ops) to `tap`/`swipe`/`inputText` on device coordinates; add scroll, long-press, drag; key-event filtering | Turns the view-only KVM into true remote control; needs coordinate scaling and consent UX; largest single value item | L |
+| 1.1 | Remote control via accessibility: map desktop-view input commands (currently no-ops) to `tap`/`swipe`/`inputText` on device coordinates; add scroll, long-press, drag; key-event filtering | Shipped (v0.4.0): MeshTunnel handles desktop cmd1/cmd2/cmd85 input, scaling image pixels to device coordinates with a tap-vs-swipe threshold; key and unicode events route through MDMAccessibilityService (nav, edit, F-keys, insert at caret) | L |
 | 1.2 | Panel exposure of existing console commands: `toast vibrate flash dial alert openurl openbrowser sysinfo netinfo storageinfo serverlog uistate` | Shipped (v0.3.0): agent shares its console dispatcher through a new mdm `console` bridge; the panel gained a typed Actions group plus four console-backed reads | M |
-| 1.3 | Wire `ACTION_REMOTE_COMMAND` (lock / wipe / notification-override) to an authenticated path; decide the fate of dead `removeLockdown`, `isDeviceOwner`, `PAIR_TOKEN` | Implemented but unreachable; needs an auth design (FCM auth or signed command) | M |
-| 1.4 | Screenshot command: one MediaProjection frame as base64 to the panel image renderer | Reuses the capture pipeline; consent prompt required | M |
-| 1.5 | Console spec sweep: `help` omits `kvmstart`/`kvmstop`; align advertised capabilities 12 vs 13; drop WebRTC remnants and `coredump` no-op advertising | Spec hygiene visible to the server UI | S |
+| 1.3 | Wire `ACTION_REMOTE_COMMAND` (lock / wipe / notification-override) to an authenticated path; decide the fate of dead `removeLockdown`, `isDeviceOwner`, `PAIR_TOKEN` | Shipped (v0.4.0): authenticated mdm `remote` command with lock/wipe/notify subcommands replaces the unreachable broadcast handler; `removeLockdown` and `PAIR_TOKEN` dead code deleted; `isDeviceOwner` kept and wired as the wipe guard; wipe clears `DISALLOW_FACTORY_RESET` first | M |
+| 1.4 | Screenshot command: one MediaProjection frame as base64 to the panel image renderer | Shipped (v0.4.0): mdm `screenshot` latches one full-resolution frame as base64 JPEG (2s timeout, works without an active desktop tunnel); the panel renders the image payload instead of JSON | M |
+| 1.5 | Console spec sweep: `help` omits `kvmstart`/`kvmstop`; align advertised capabilities 12 vs 13; drop WebRTC remnants and `coredump` no-op advertising | Shipped: help lists `kvmstart`/`kvmstop`; hello capabilities aligned to 13 (the Desktop bit was missing while coreinfo already said 13); `coredump`/`getcoredump` no-ops and WebRTC remnants dropped | S |
 
 ## P2 - Panel and fleet expansion
 
@@ -62,7 +62,9 @@ Protects existing guarantees; nothing new is visible to users.
 - Dead-code policy: every P1.3 / P1.5 item ends in either wiring or deliberate
   deletion, recorded in `docs/`.
 - Verification per item: P0 -> protocol tests + adb; P1.1 and P1.4 -> adb E2E
-  mandatory; P2 -> harness + screenshots + design gate; P3 -> lab device only.
+  (device gate 0.7 skipped 2026-09-30 by user decision; verified via compile +
+  protocol tests + harness screenshots instead); P2 -> harness + screenshots +
+  design gate; P3 -> lab device only.
 - Sequencing: P0 before any feature (the always-on chain is load-bearing);
   P1 before P2 (agent capabilities gate panel work); P3 optional pending an
   enrollment channel.

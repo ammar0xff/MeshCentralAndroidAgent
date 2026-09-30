@@ -224,10 +224,6 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
         }
     }
 
-    private fun sendConsoleMessage(msg: String) {
-        if (meshAgent != null) { meshAgent?.sendConsoleResponse(msg, null) }
-    }
-
     private val batteryInfoReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (meshAgent != null) { meshAgent?.batteryStateChanged(intent) }
@@ -565,15 +561,6 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
         } else {
             MDMForegroundService.ensureRunning(this)
         }
-    }
-
-    private fun ensureAgentIdentity(): Boolean {
-        if (AgentIdentity.ensure(applicationContext)) return true
-        showAlertMessage(
-            getString(R.string.agent_identity_error_title),
-            getString(R.string.agent_identity_error_message)
-        )
-        return false
     }
 
     fun showNotification(title: String?, body: String?, url: String?) {

@@ -1,6 +1,8 @@
 package com.meshcentral.agent
 
 import android.annotation.SuppressLint
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -254,7 +256,7 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
                     var agentid = 14;           // Type of agent (14, Android in this case)
                     var agentver = 0            // Agent version (TODO)
                     var platfromType = 3;       // This is the icon: 1 = Desktop, 2 = Laptop, 3 = Mobile, 4 = Server, 5 = Disk, 6 = Router
-                    var capabilities = 12;      // Capabilities of the agent (bitmask): 1 = Desktop, 2 = Terminal, 4 = Files, 8 = Console, 16 = JavaScript
+                    var capabilities = 13;      // Capabilities of the agent (bitmask): 1 = Desktop, 2 = Terminal, 4 = Files, 8 = Console, 16 = JavaScript
                     var deviceName: String? = null;
                     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S) {
                        deviceName = Settings.Secure.getString(parent.getApplicationContext().contentResolver, "bluetooth_name");
@@ -454,17 +456,11 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
                             tunnels.add(tunnel)
                             tunnel.Start()
                         }
-                        else -> {
+                else -> {
                             // Unknown message type, ignore it.
                             println("Unhandled msg type: $msgtype")
                         }
                     }
-                }
-                "coredump" -> {
-                    // Nop
-                }
-                "getcoredump" -> {
-                    // Nop
                 }
                 "getUserImage" -> {
                     // User real name and optional image
@@ -589,6 +585,64 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
                 "launchapp" -> response.put("result", MDMAccessibilityService.launchApp(args.optString("package")))
                 "clicknode" -> response.put("result", MDMAccessibilityService.clickNode(args.optString("nodeid")))
                 "settext" -> response.put("result", MDMAccessibilityService.setTextOnNode(args.optString("nodeid"), args.optString("text")))
+                "screenshot" -> {
+                    val svc = g_ScreenCaptureService
+                    val bytes = if (svc != null) svc.captureSnapshotJpeg(2000) else null
+                    if (bytes == null || bytes.isEmpty()) {
+                        response.put("result", JSONObject().put("error",
+                            "no frame available: start remote desktop first (kvmstart) and grant screen access"))
+                    } else {
+                        response.put("result", JSONObject().apply {
+                            put("mime", "image/jpeg")
+                            put("data", Base64.encodeToString(bytes, Base64.NO_WRAP))
+                            put("size", bytes.size)
+                        })
+                    }
+                }
+                "remote" -> {
+                    when (val sub = args.optString("command")) {
+                        "lock" -> {
+                            val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                            val admin = ComponentName(ctx, MDMAdminReceiver::class.java)
+                            if (!dpm.isAdminActive(admin)) {
+                                response.put("result", JSONObject().put("error", "device admin is not active on this device"))
+                            } else {
+                                try {
+                                    dpm.lockNow()
+                                    response.put("result", JSONObject().put("ok", true).put("command", "lock"))
+                                } catch (e: Exception) {
+                                    response.put("result", JSONObject().put("error", e.toString()))
+                                }
+                            }
+                        }
+                        "wipe" -> {
+                            if (!MDMPermissions.isDeviceOwner(ctx)) {
+                                response.put("result", JSONObject().put("error", "wipe requires device owner or profile owner"))
+                            } else {
+                                val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                                val admin = ComponentName(ctx, MDMAdminReceiver::class.java)
+                                try {
+                                    dpm.clearUserRestriction(admin, UserManager.DISALLOW_FACTORY_RESET)
+                                    dpm.wipeData(0)
+                                    response.put("result", JSONObject().put("ok", true).put("command", "wipe"))
+                                } catch (e: Exception) {
+                                    response.put("result", JSONObject().put("error", e.toString()))
+                                }
+                            }
+                        }
+                        "notify" -> {
+                            val text = args.optString("text").trim()
+                            if (text.isEmpty() || text.length > 120) {
+                                response.put("result", JSONObject().put("error", "text must be 1-120 characters"))
+                            } else {
+                                MDMForegroundService.setNotificationText(ctx, text)
+                                response.put("result", JSONObject().put("ok", true).put("command", "notify"))
+                            }
+                        }
+                        else -> response.put("result", JSONObject().put("error", "unknown remote command: $sub"))
+                    }
+                }
+
                 "console" -> {
                     // Bridge for the panel: {name, argv:[...]} runs one command
                     // from the shared console dispatcher and returns its text.
@@ -836,7 +890,7 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
         when (cmd) {
             "help" -> {
                 // Return the list of available console commands
-                r = "Available commands: alert, battery, dial, flash, netinfo, openurl, openbrowser,\r\n  serverlog, sysinfo, storageinfo, toast, uiclose, uistate, vibrate"
+                r = "Available commands: alert, battery, dial, flash, kvmstart, kvmstop, netinfo,\r\n  openurl, openbrowser, serverlog, sysinfo, storageinfo, toast, uiclose, uistate,\r\n  vibrate"
             }
             "alert" -> {
                 // Display alert message

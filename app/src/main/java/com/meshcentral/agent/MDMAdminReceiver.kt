@@ -45,25 +45,6 @@ class MDMAdminReceiver : DeviceAdminReceiver() {
                 Log.e(TAG, "Failed to apply lockdown", e)
             }
         }
-
-        fun removeLockdown(context: Context) {
-            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val admin = getComponentName(context)
-
-            if (!dpm.isAdminActive(admin)) return
-
-            try {
-                dpm.setUninstallBlocked(admin, context.packageName, false)
-                dpm.clearUserRestriction(admin, UserManager.DISALLOW_FACTORY_RESET)
-                dpm.clearUserRestriction(admin, UserManager.DISALLOW_USB_FILE_TRANSFER)
-                dpm.clearUserRestriction(admin, UserManager.DISALLOW_ADD_USER)
-                dpm.clearUserRestriction(admin, UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
-                dpm.clearUserRestriction(admin, UserManager.DISALLOW_ADJUST_VOLUME)
-                Log.i(TAG, "Lockdown removed")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to remove lockdown", e)
-            }
-        }
     }
 
     override fun onEnabled(context: Context, intent: Intent) {

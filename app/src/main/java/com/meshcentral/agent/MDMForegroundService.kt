@@ -47,7 +47,6 @@ class MDMForegroundService : Service(), MDMAgentHost {
         const val ACTION_START = "com.meshcentral.agent.START"
         const val ACTION_STOP = "com.meshcentral.agent.STOP"
         const val ACTION_RECONNECT = "com.meshcentral.agent.RECONNECT"
-        const val ACTION_REMOTE_COMMAND = "com.meshcentral.agent.REMOTE_COMMAND"
 
         @Volatile
         var running = false
@@ -80,6 +79,28 @@ class MDMForegroundService : Service(), MDMAgentHost {
                 context.startService(intent)
             }
         }
+
+        /** Replace the text of the persistent foreground notification (mdm "notify"). */
+        fun setNotificationText(context: Context, text: String) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager?.notify(NOTIFICATION_ID, buildNotification(context, text))
+        }
+
+        fun buildNotification(context: Context, text: String): Notification {
+            val intent = Intent(context, MainActivity::class.java)
+            val pendingIntent = PendingIntent.getActivity(
+                context, 0, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            return NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle(context.getString(R.string.mdm_service_title))
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_message)
+                .setContentIntent(pendingIntent)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setOngoing(true)
+                .build()
+        }
     }
 
     private var scheduler: ScheduledExecutorService? = null
@@ -110,7 +131,6 @@ class MDMForegroundService : Service(), MDMAgentHost {
                 stopSelf()
                 return START_NOT_STICKY
             }
-            ACTION_REMOTE_COMMAND -> handleRemoteCommand(intent)
             else -> {
                 startThisForeground()
                 running = true
@@ -304,40 +324,6 @@ class MDMForegroundService : Service(), MDMAgentHost {
         meshAgent?.tunnels?.getOrNull(0)?.sendCtrlResponse(deviceInfo)
     }
 
-    // ---- Remote command handling --------------------------------------------
-
-    private fun handleRemoteCommand(intent: Intent) {
-        val command = intent.getStringExtra("command") ?: return
-        Log.i(TAG, "Remote command: $command")
-
-        when (command) {
-            "lock" -> lockDevice()
-            "wipe" -> wipeDevice()
-            "screenshot" -> captureScreenshot()
-            "update_notification" -> {
-                val text = intent.getStringExtra("text") ?: getString(R.string.mdm_service_running)
-                updateNotification(text)
-            }
-        }
-    }
-
-    private fun lockDevice() {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
-        dpm.lockNow()
-    }
-
-    private fun wipeDevice() {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
-        dpm.wipeData(0)
-    }
-
-    private fun captureScreenshot() {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            putExtra("action", "screenshot")
-        }
-        startActivity(intent)
-    }
-
     // ---- Notification --------------------------------------------------------
 
     private fun updateNotification(text: String) {
@@ -346,22 +332,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
         manager.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun buildNotification(text: String): Notification {
-        val intent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.mdm_service_title))
-            .setContentText(text)
-            .setSmallIcon(R.drawable.ic_message)
-            .setContentIntent(pendingIntent)
-            .setCategory(Notification.CATEGORY_SERVICE)
-            .setOngoing(true)
-            .build()
-    }
+    private fun buildNotification(text: String): Notification = buildNotification(this, text)
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

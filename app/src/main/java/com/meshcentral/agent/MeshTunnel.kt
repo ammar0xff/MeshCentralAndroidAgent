@@ -12,12 +12,12 @@ import android.os.CountDownTimer
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
+import android.view.KeyEvent
 import okhttp3.*
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.json.JSONArray
 import org.json.JSONObject
-//import org.webrtc.PeerConnectionFactory
 import java.io.*
 import java.nio.charset.Charset
 import java.security.MessageDigest
@@ -53,6 +53,9 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
     var _webSocket: WebSocket? = null
     var state: Int = 0 // 0 = Disconnected, 1 = Connecting, 2 = Connected
     var usage: Int = 0 // 2 = Desktop, 5 = Files, 10 = File transfer
+    private var dragStartX = 0
+    private var dragStartY = 0
+    private var dragArmed = false
     private var tunnelOptions : JSONObject? = null
     private var lastDirRequest : JSONObject? = null
     private var fileUpload : OutputStream? = null
@@ -312,11 +315,20 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
 
     private fun processBinaryDesktopCmd(cmd : Int, cmdsize: Int, msg: ByteString) {
         when (cmd) {
-            1 -> { // Legacy key input
-                // Nop
+            1 -> { // Key input (Windows VK codes). Printable characters arrive as cmd 85.
+                if (cmdsize < 6) return
+                val action = msg[4].toInt() and 0xFF
+                if (action != 0 && action != 4) return // Down only; up events are ignored.
+                handleDesktopKey(msg[5].toInt() and 0xFF)
             }
             2 -> { // Mouse input
-                // Nop
+                if (cmdsize == 12) return // Scroll wheel is not supported.
+                if (cmdsize < 10) return
+                val flags = msg[5].toInt() and 0xFF
+                if (flags != 0x02 && flags != 0x04) return // Move, double-click marker and non-left buttons.
+                val x = ((msg[6].toInt() and 0xFF) shl 8) or (msg[7].toInt() and 0xFF)
+                val y = ((msg[8].toInt() and 0xFF) shl 8) or (msg[9].toInt() and 0xFF)
+                handleDesktopMouse(flags == 0x02, x, y)
             }
             5 -> { // Remote Desktop Settings
                 if (cmdsize < 6) return
@@ -334,8 +346,11 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
             8 -> { // Pause
                 // Nop
             }
-            85 -> { // Unicode key input
-                // Nop
+            85 -> { // Unicode key input (UTF-16 code unit, down/up pair)
+                if (cmdsize < 7) return
+                if ((msg[4].toInt() and 0xFF) != 0) return // Down only; up events are ignored.
+                val ch = (((msg[5].toInt() and 0xFF) shl 8) or (msg[6].toInt() and 0xFF)).toChar()
+                handleDesktopChar(ch)
             }
             87 -> { // Input Lock
                 // Nop
@@ -343,6 +358,68 @@ class MeshTunnel(parent: MeshAgent, url: String, serverData: JSONObject) : WebSo
             else -> {
                 println("Unknown desktop binary command: $cmd, Size: ${msg.size}, Hex: ${msg.toByteArray().toHex()}")
             }
+        }
+    }
+
+    private fun scaleToDevice(v: Int): Int {
+        val s = g_desktop_scalingLevel
+        return if ((s >= 1) && (s <= 4096) && (s != 1024)) (v * 1024) / s else v
+    }
+
+    private fun clampToScreen(x: Int, y: Int): Pair<Int, Int> {
+        val svc = g_ScreenCaptureService
+        if (svc == null) return x.coerceAtLeast(0) to y.coerceAtLeast(0)
+        return x.coerceIn(0, svc.mWidth) to y.coerceIn(0, svc.mHeight)
+    }
+
+    private fun handleDesktopMouse(down: Boolean, rawX: Int, rawY: Int) {
+        if (!MDMAccessibilityService.isConnected()) return
+        val (x, y) = clampToScreen(scaleToDevice(rawX), scaleToDevice(rawY))
+        if (down) {
+            dragStartX = x
+            dragStartY = y
+            dragArmed = true
+        } else if (dragArmed) {
+            dragArmed = false
+            val dx = (x - dragStartX).toDouble()
+            val dy = (y - dragStartY).toDouble()
+            val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+            if (dist < 12.0) {
+                MDMAccessibilityService.tap(x, y)
+            } else {
+                val duration = (dist * 0.3).toLong().coerceIn(80L, 500L)
+                MDMAccessibilityService.swipe(dragStartX, dragStartY, x, y, duration)
+            }
+        }
+    }
+
+    private fun handleDesktopKey(vk: Int) {
+        if (!MDMAccessibilityService.isConnected()) return
+        val ak = when (vk) {
+            8 -> KeyEvent.KEYCODE_DEL
+            13 -> KeyEvent.KEYCODE_ENTER
+            27 -> KeyEvent.KEYCODE_ESCAPE
+            0x21 -> KeyEvent.KEYCODE_PAGE_UP
+            0x22 -> KeyEvent.KEYCODE_PAGE_DOWN
+            0x23 -> KeyEvent.KEYCODE_MOVE_END
+            0x24 -> KeyEvent.KEYCODE_MOVE_HOME
+            0x25 -> KeyEvent.KEYCODE_DPAD_LEFT
+            0x26 -> KeyEvent.KEYCODE_DPAD_UP
+            0x27 -> KeyEvent.KEYCODE_DPAD_RIGHT
+            0x28 -> KeyEvent.KEYCODE_DPAD_DOWN
+            0x2E -> KeyEvent.KEYCODE_FORWARD_DEL
+            else -> if (vk in 0x70..0x7B) KeyEvent.KEYCODE_F1 + (vk - 0x70) else 0
+        }
+        if (ak != 0) MDMAccessibilityService.pressKey(ak)
+    }
+
+    private fun handleDesktopChar(ch: Char) {
+        if (!MDMAccessibilityService.isConnected()) return
+        when (ch) {
+            '\b' -> MDMAccessibilityService.pressKey(KeyEvent.KEYCODE_DEL)
+            '\r', '\n' -> MDMAccessibilityService.pressKey(KeyEvent.KEYCODE_ENTER)
+            '\u001B' -> MDMAccessibilityService.pressKey(KeyEvent.KEYCODE_ESCAPE)
+            else -> if (ch.code >= 32) MDMAccessibilityService.appendText(ch.toString())
         }
     }
 
@@ -858,26 +935,5 @@ parent.parent.getApplicationContext().contentResolver.query(
             }
         }
     }
-
-    // WebRTC setup
-    /*
-    private fun initializePeerConnectionFactory() {
-        //Initialize PeerConnectionFactory globals.
-        val initializationOptions = PeerConnectionFactory.InitializationOptions.builder(parent.parent).createInitializationOptions()
-        PeerConnectionFactory.initialize(initializationOptions)
-
-        //Create a new PeerConnectionFactory instance - using Hardware encoder and decoder.
-        val options = PeerConnectionFactory.Options()
-        //val defaultVideoEncoderFactory = DefaultVideoEncoderFactory(rootEglBase?.eglBaseContext,  /* enableIntelVp8Encoder */true,  /* enableH264HighProfile */true)
-        //val defaultVideoDecoderFactory = DefaultVideoDecoderFactory(rootEglBase?.eglBaseContext)
-        val factory = PeerConnectionFactory.builder()
-                .setOptions(options)
-                //.setVideoEncoderFactory(defaultVideoEncoderFactory)
-                //.setVideoDecoderFactory(defaultVideoDecoderFactory)
-                .createPeerConnectionFactory()
-
-        //factory.createPeerConnection()
-    }
-    */
 
 }
