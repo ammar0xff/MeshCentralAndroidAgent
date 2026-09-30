@@ -643,6 +643,40 @@ class MeshAgent(parent: MDMAgentHost, host: String, certHash: String, devGroupId
                     }
                 }
 
+                "ls" -> response.put("result", MDMFiles.ls(ctx, args.optString("path", "")))
+                "rm" -> {
+                    val path = args.optString("path", "")
+                    val res = MDMFiles.rm(ctx, path, args.optJSONArray("names") ?: JSONArray())
+                    response.put("result", res)
+                    val del = res.optJSONArray("deleted")
+                    if (res.optBoolean("ok", false) && del != null && del.length() == 1) {
+                        val n = del.optString(0)
+                        val eventArgs = JSONArray()
+                        eventArgs.put("$path/$n")
+                        logServerEventEx(45, eventArgs, "Delete: \"$path/$n\"", json)
+                    }
+                }
+                "download" -> {
+                    val res = MDMFiles.download(ctx, args.optString("path", ""))
+                    response.put("result", res)
+                    if (!res.has("error")) {
+                        val eventArgs = JSONArray()
+                        eventArgs.put(res.optString("name"))
+                        eventArgs.put(res.optLong("size"))
+                        logServerEventEx(106, eventArgs, "Download: \"${res.optString("name")}\", Size: ${res.optLong("size")}", json)
+                    }
+                }
+                "upload" -> {
+                    val res = MDMFiles.upload(ctx, args.optString("path", ""), args.optString("name", ""), args.optString("data", ""))
+                    response.put("result", res)
+                    if (res.optBoolean("ok", false)) {
+                        val eventArgs = JSONArray()
+                        eventArgs.put(res.optString("name"))
+                        eventArgs.put(res.optLong("size"))
+                        logServerEventEx(105, eventArgs, "Upload: \"${res.optString("name")}\", Size: ${res.optLong("size")}", json)
+                    }
+                }
+
                 "console" -> {
                     // Bridge for the panel: {name, argv:[...]} runs one command
                     // from the shared console dispatcher and returns its text.
