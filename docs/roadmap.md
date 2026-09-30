@@ -15,8 +15,8 @@ Protects existing guarantees; nothing new is visible to users.
 | 0.3 | `showNotification` lateinit crash on API 23-25 and headless FCM paths; console `alert` `splitCmd[2]` out-of-bounds | Crash / failed-command paths on supported devices | S |
 | 0.4 | Ship pending fixes: `MeshAgent.kt` verbatim string-seq echo + `strings.xml` em-dash | Protocol correctness (seq correlation for string sequence ids) | S |
 | 0.5 | Unify signing secret names (`ANDROID_SIGNING_KEY_B64` vs `ANDROID_KEYSTORE_BASE64`) | Tag-release workflow reads a secret name CI never sets; tag releases fail | S |
-| 0.6 | Credential rotation (SSH password, MeshCentral admin, node credentials) | Standing security item, after E2E | S |
-| 0.7 | adb E2E always-on gate: install final APK, re-grant permissions, screen-locked stability, live panel commands, 10-minute idle | The only remaining proof of the core promise; unlocks Tier 1 verification. Skipped on request (2026-09-30); rotate credentials (0.6) still pending a device session | M |
+| 0.6 | Credential rotation (SSH password, MeshCentral admin, node credentials) | Shipped (2026-09-30): MeshCentral admin password rotated via `meshcentral --resetaccount` + container restart, verified new-credential → 200 and old-credential → 401 on `/mdmpanel`; SSH password deliberately left unchanged per user decision (2026-09-30); node credentials not rotated (agent identity is per-install) | S |
+| 0.7 | adb E2E always-on gate: install final APK, re-grant permissions, screen-locked stability, live panel commands, 10-minute idle | The only remaining proof of the core promise; unlocks Tier 1 verification. Skipped on request (2026-09-30); credential rotation (0.6) shipped same day | M |
 
 ## P1 - Differentiation (agent features core MeshCentral cannot do)
 
