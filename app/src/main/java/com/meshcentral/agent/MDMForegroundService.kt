@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
@@ -54,6 +55,18 @@ class MDMForegroundService : Service(), MDMAgentHost {
         @Volatile
         var running = false
             private set
+
+        /**
+         * Sink for timeline events raised outside the service (accessibility app
+         * switches); set while the service lives, so events drop cleanly when MDM
+         * is not running.
+         */
+        @Volatile
+        private var timelineSink: ((JSONObject) -> Unit)? = null
+
+        fun pushTimelineEvent(event: JSONObject) {
+            timelineSink?.invoke(event)
+        }
 
         /** Idempotent: no-op when the service is already up. */
         fun ensureRunning(context: Context) {
@@ -116,6 +129,13 @@ class MDMForegroundService : Service(), MDMAgentHost {
         super.onCreate()
         Log.i(TAG, "Service created")
         createNotificationChannel()
+        timelineSink = { ev -> offerEvent(ev) }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        registerReceiver(screenReceiver, filter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -186,6 +206,7 @@ class MDMForegroundService : Service(), MDMAgentHost {
         val agent = meshAgent
         if (agent != null && agent.state == 3) {
             sendHeartbeat()
+            flushEvents()
             reportTicksLeft--
             if (reportTicksLeft <= 0) {
                 reportTicksLeft = REPORT_INTERVAL_TICKS
@@ -406,6 +427,48 @@ class MDMForegroundService : Service(), MDMAgentHost {
         return "$sign${a / 10000}.${(a % 10000).toString().padStart(4, '0')}"
     }
 
+    // ---- Timeline events (2.5) -----------------------------------------------
+
+    private val pendingEvents = ArrayList<JSONObject>()
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val type = when (intent.action) {
+                Intent.ACTION_SCREEN_ON -> "screen-on"
+                Intent.ACTION_SCREEN_OFF -> "screen-off"
+                Intent.ACTION_USER_PRESENT -> "unlock"
+                else -> return
+            }
+            offerEvent(
+                JSONObject().apply {
+                    put("type", type)
+                    put("ts", System.currentTimeMillis())
+                }
+            )
+        }
+    }
+
+    /** Queue a timeline event; drains immediately when connected. */
+    private fun offerEvent(event: JSONObject) {
+        synchronized(pendingEvents) {
+            if (pendingEvents.size >= 50) pendingEvents.removeAt(0) // drop oldest when offline
+            pendingEvents.add(event)
+        }
+        flushEvents()
+    }
+
+    /** Push queued events over the main websocket; no-op while disconnected. */
+    private fun flushEvents() {
+        val agent = meshAgent
+        if (agent == null || agent.state != 3) return
+        while (true) {
+            val ev = synchronized(pendingEvents) {
+                if (pendingEvents.isEmpty()) null else pendingEvents.removeAt(0)
+            } ?: break
+            agent.pushMdmResult("mdmevent", "evt-" + ev.optLong("ts"), ev)
+        }
+    }
+
     // ---- Notification --------------------------------------------------------
 
     private fun updateNotification(text: String) {
@@ -440,6 +503,8 @@ class MDMForegroundService : Service(), MDMAgentHost {
         // be cleared here too: otherwise the next watchdog tick sees running=true,
         // ensureRunning() no-ops, and no replacement alarm is ever armed.
         running = false
+        timelineSink = null
+        try { unregisterReceiver(screenReceiver) } catch (ex: Exception) { }
         scheduler?.shutdown()
         scheduler = null
         meshAgent?.Stop()

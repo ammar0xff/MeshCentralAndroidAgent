@@ -94,8 +94,24 @@ class MDMAccessibilityService : AccessibilityService() {
         sendBroadcast(Intent(ACTION_ACCESSIBILITY_CONNECTED).setPackage(packageName))
     }
 
+    private var lastWindowPkg: String? = null
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // The agent polls for state rather than streaming events; nothing to do per event.
+        // Timeline seam (2.5): app switches are the only accessibility signal worth a
+        // row; screen/lock transitions arrive as broadcasts in MDMForegroundService.
+        if (event == null) return
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg == lastWindowPkg) return
+        if (pkg == "com.android.systemui") return   // lockscreen and shade noise
+        lastWindowPkg = pkg
+        MDMForegroundService.pushTimelineEvent(
+            JSONObject().apply {
+                put("type", "app")
+                put("pkg", pkg)
+                put("ts", System.currentTimeMillis())
+            }
+        )
     }
 
     override fun onInterrupt() {
