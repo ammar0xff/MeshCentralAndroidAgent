@@ -37,6 +37,7 @@ Protects existing guarantees; nothing new is visible to users.
 | 2.3 | Device picker outside the console context plus mesh-level fan-out (one command to all nodes) | Shipped (v0.5.0): `GET /mdmpanel/api/devices` lists server-known nodes (name from the db record, reachability from `wsagents` + `GetConnectivityState`, `mdm` capability from the node's `agent.core` identity) behind a header picker; `POST /mdmpanel/api/fanout` sends one command to every online Android device with per-target derived seqs, skipped nodes reported by reason (`offline` / `not an Android agent`); fleet status (`nodeid=*`) aggregates Android devices; live-verified 2026-09-30 (1 target, 5 desktop nodes skipped, battery result correlated) | M |
 | 2.4 | Scheduled reports (battery/storage/location snapshots) and offline alerts surfaced as `log`/`msgid` events | Shipped (v0.7.0): the agent pushes an unsolicited `heartbeat` mdmResult over the main websocket every 30 s (battery level plus charging, storage available/total, location snapshot; replaces the old tunnel-only `mdm_heartbeat` ping that never reached the plugin) and emits an hourly report node event (msgid 60) through `logServerEventEx`; the plugin records the newest heartbeat as `lastReport`, exposes it as `report` on `GET /mdmpanel/api/status`, and a 15 s server-side watcher fires exactly one node event per Android device transition (msgid 61 offline, 62 back online, dispatched with the core's agent `log` event shape); the panel renders a muted report strip under the header (battery, storage, location, age; hidden in fleet view); harness-tested (protocol section 11 plus 19 screenshot checks); live-verified on device 2026-09-30 after the v0.8.0 APK install (battery/storage/location/age report strip fed by 30 s heartbeats; reinstall assigned a fresh node id, old id no longer listed) | M |
 | 2.5 | Keyguard / accessibility event streaming into a panel timeline | Shipped (v0.8.0): MDMAccessibilityService streams `TYPE_WINDOW_STATE_CHANGED` app switches (pkg-deduped, SystemUI filtered) and MDMForegroundService broadcasts screen-on / screen-off / unlock through a 50-event queue into unsolicited `mdmevent` mdmResults over the main websocket; the plugin buffers events per device in a 200-entry ring (server receive time stamped, seq correlation untouched) and serves them via `GET /mdmpanel/api/timeline` (newest last); the panel gains a Timeline rail entry (hidden in fan-out, like Files) that swaps the argument form for a hairline timestamp-gutter list rendered from device time; harness-tested (protocol section 12 plus 20 screenshot checks) and gate 100/100; live-verified on device 2026-09-30 after the v0.8.0 APK install (app-switch events streaming into the ring, 22 events within minutes; screen/lock events follow device use) | M |
+| 2.6 | Structured result views plus a live remote screen view | Shipped (panel): every answer that used to fall back to raw JSON now renders typed output (kv rows, action cards with Sent/Failed status, device/location/foregroundapp cards, permission tables with word-labeled status, console text blocks, structured fan-out detail; raw JSON stays behind the JSON toggle); the Screen rail entry swaps the form for a live frame viewer (kvmstart then screenshot polling every 700 ms, frame-aspect tap/swipe mapping with duration control, explicit Stop, stream invalidated on exit and hidden in fan-out) backed by console-bridge `kvmstart`/`kvmstop`; agent-side: MDMForegroundService can start/stop MediaProjection headless through a MainActivity marker intent with a destroyed-activity guard, so remote screen control works when the panel activity is gone; harness-tested (protocol additions plus 27 screenshot checks including 23-28 location/permissions/device/foregroundapp/screen) and gate 100/100; device verification of the headless projection path pending the next APK install | M |
 
 ## P3 - Platform and enterprise (needs device owner or zero-touch)
 
@@ -56,16 +57,24 @@ Skipped by user decision (2026-09-30): no enrollment channel will be pursued; 3.
 - Bypassing MediaProjection / autostart consent: enforced by the OS and OEMs.
 - OEM autostart re-entry beyond the HONOR/Huawei `mdm://ack` flow.
 
-## Quality gates (2026-09-30)
+## Quality gates (2026-10-01)
 
-Audit batch: CI keystore step fails loud when `ANDROID_SIGNING_KEY_B64` is
-missing (no throwaway-key signature that would reissue every installed agent's
-node id), JVM unit tests wired into CI (`testDebugUnitTest` before the APK
-build), offline event queues split per stream so a notification burst cannot
-evict timeline events (50 each), feed rows render the raw event word, and
-dead agent node records were pruned from `meshcentral.db` (3 retired ids,
-backup kept on the host). Standing suites: `test-protocol.js` (21 sections),
-`ProtocolValidationTest` (12 JVM tests), 22 screenshot checks, design gate
+Audit batch (2026-09-30): CI keystore step fails loud when
+`ANDROID_SIGNING_KEY_B64` is missing (no throwaway-key signature that would
+reissue every installed agent's node id), JVM unit tests wired into CI
+(`testDebugUnitTest` before the APK build), offline event queues split per
+stream so a notification burst cannot evict timeline events (50 each), feed
+rows render the raw event word, and dead agent node records were pruned from
+`meshcentral.db` (3 retired ids, backup kept on the host).
+
+Structured-views + screen batch (2026-10-01): every panel result renders
+typed output (no raw-JSON fallback outside the JSON toggle), the Screen rail
+entry drives a live frame viewer (kvmstart/kvmstop console bridge, screenshot
+polling, tap and swipe mapping), and MDMForegroundService gained a headless
+MediaProjection path (MainActivity marker intent, destroyed-activity guard)
+so remote screen control works without the panel activity alive.
+Standing suites: `test-protocol.js` (21 sections),
+`ProtocolValidationTest` (12 JVM tests), 27 screenshot checks, design gate
 100/100.
 
 ## Cross-cutting rules

@@ -327,11 +327,23 @@ class MDMForegroundService : Service(), MDMAgentHost {
     }
 
     override fun startProjection() {
-        g_mainActivity?.startProjection()
+        val activity = g_mainActivity
+        if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+            activity.startProjection()
+        } else {
+            // Headless: the MediaProjection consent prompt needs a live
+            // activity, so bring this app up with the marker extra.
+            MainActivity.requestProjectionUi(this)
+        }
     }
 
     override fun stopProjection() {
-        g_mainActivity?.stopProjection()
+        val activity = g_mainActivity
+        if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+            activity.stopProjection()
+        } else if (g_ScreenCaptureService != null) {
+            startService(ScreenCaptureService.getStopIntent(this))
+        }
     }
 
     override fun getContentResolver(): ContentResolver {

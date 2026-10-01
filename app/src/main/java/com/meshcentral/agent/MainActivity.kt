@@ -159,6 +159,13 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
 
         setContentView(R.layout.activity_main)
 
+        // A headless kvmstart arrives as this marker: the projection consent
+        // prompt needs this UI, so fire it as soon as the activity exists.
+        if (intent.getBooleanExtra(EXTRA_START_PROJECTION, false)) {
+            intent.removeExtra(EXTRA_START_PROJECTION)
+            startProjection()
+        }
+
         //var toolbar = g_mainActivity?.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)
         setSupportActionBar(findViewById(R.id.toolbar))
 
@@ -221,6 +228,16 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
         settingsChanged()
         if (g_autoConnect && !g_userDisconnect && (meshAgent == null)) {
             MDMForegroundService.ensureRunning(this)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Deliberately no setIntent: the marker must fire once, not survive a
+        // later activity recreation that re-reads the same intent.
+        if (intent.getBooleanExtra(EXTRA_START_PROJECTION, false)) {
+            intent.removeExtra(EXTRA_START_PROJECTION)
+            startProjection()
         }
     }
 
@@ -641,6 +658,12 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
     // Start screen sharing
     override fun startProjection() {
         if ((g_ScreenCaptureService != null) || (meshAgent == null) || (meshAgent!!.state != 3)) return
+        if (isFinishing || isDestroyed) {
+            // Stale parent reference after this activity was destroyed: reopen
+            // through the marker path instead of launching from a dead UI.
+            requestProjectionUi(this)
+            return
+        }
         val mProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         screenCaptureLauncher.launch(mProjectionManager.createScreenCaptureIntent())
     }
@@ -712,5 +735,22 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
         private const val TAG = "MainActivity"
         const val REQUEST_ALL_PERMISSIONS = 1
         const val REQUEST_LOCAL_NETWORK_PERMISSION = 2
+
+        /** Marker extra: reopen this UI to launch the screen-capture consent prompt. */
+        const val EXTRA_START_PROJECTION = "meshcentral.startProjection"
+
+        /**
+         * Bring up MainActivity so it can show the MediaProjection consent
+         * dialog. The headless host calls this when kvmstart arrives with no
+         * usable activity: the prompt cannot be started from a service.
+         */
+        fun requestProjectionUi(context: Context) {
+            if (g_ScreenCaptureService != null) return
+            val intent = Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra(EXTRA_START_PROJECTION, true)
+            }
+            context.startActivity(intent)
+        }
     }
 }
