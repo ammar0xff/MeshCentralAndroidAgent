@@ -73,6 +73,9 @@ entry drives a live frame viewer (kvmstart/kvmstop console bridge, screenshot
 polling, tap and swipe mapping), and MDMForegroundService gained a headless
 MediaProjection path (MainActivity marker intent, destroyed-activity guard)
 so remote screen control works without the panel activity alive.
+Launcher defaults: Automatic Connection and Automatic Consent now default to
+on (XML default, read fallbacks, plus a one-time migration for installs that
+already persisted the old off value).
 Standing suites: `test-protocol.js` (21 sections),
 `ProtocolValidationTest` (12 JVM tests), 27 screenshot checks, design gate
 100/100.

@@ -84,7 +84,7 @@ var cameraPresent : Boolean = false
 var pendingActivities : ArrayList<PendingActivityData> = ArrayList<PendingActivityData>()
 var pushMessagingToken : String? = null
 var g_autoConnect : Boolean = true
-var g_autoConsent : Boolean = false
+var g_autoConsent : Boolean = true
 var g_userDisconnect : Boolean = false // Indicate user initiated disconnection
 var g_retryTimer: CountDownTimer? = null
 
@@ -225,6 +225,17 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
         }
 
         // Activate the settings
+        // One-time default migration: installs that opened the settings screen
+        // before already persisted the old off-by-default values; flip them once
+        // so Automatic Connection and Automatic Consent start on.
+        val setupPrefs = PreferenceManager.getDefaultSharedPreferences(this)
+        if (!setupPrefs.contains("pref_defaults_v2")) {
+            setupPrefs.edit()
+                .putBoolean("pref_autoconnect", true)
+                .putBoolean("pref_autoconsent", true)
+                .putString("pref_defaults_v2", "1")
+                .apply()
+        }
         settingsChanged()
         if (g_autoConnect && !g_userDisconnect && (meshAgent == null)) {
             MDMForegroundService.ensureRunning(this)
@@ -677,8 +688,8 @@ class MainActivity : AppCompatActivity(), MDMAgentHost {
     fun settingsChanged() {
         this.runOnUiThread {
             val pm: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
-            g_autoConnect = pm.getBoolean("pref_autoconnect", false)
-            g_autoConsent = pm.getBoolean("pref_autoconsent", false)
+            g_autoConnect = pm.getBoolean("pref_autoconnect", true)
+            g_autoConsent = pm.getBoolean("pref_autoconsent", true)
             g_userDisconnect = false
             if (g_autoConnect == false) {
                 if (g_retryTimer != null) {
